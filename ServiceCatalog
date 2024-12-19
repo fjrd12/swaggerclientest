@@ -26,7 +26,9 @@ class ServiceCatalog:
             self.routes_dict = self.http_client.get_routes_df(swagger_route="/swagger.json")
             self.jsonapi = self.routes_dict.to_json()
             self.services = self.source['services']
-            self.api_filter = APIDataFrameFilter(self.routes_dict)            
+            self.api_filter = APIDataFrameFilter(self.routes_dict)    
+            self.api_url = self.source['url']
+            self.api_key = self.source['authkey']
         else:
             raise ValueError(f"Source '{source}' not found in catalog")
 
@@ -62,33 +64,34 @@ class ServiceCatalog:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         return TVars
 
-    def ExecuteService(self, servicename, params) -> any:
-        """
-        Execute a specific service with given parameters.
-
-        :param servicename: The name of the service to execute.
-        :param params: The parameters to pass to the service.
-        :return: The response from the service execution.
-        :raises ValueError: If the service is not found in the catalog or if an HTTP error occurs.
-        """
+    def ExecuteService(self, servicename, params=[], body={}) -> any: 
         service = next((item for item in self.source['services'] if item['name'] == servicename), None)
         if service: 
-            # Prepare the name of the method and route
+            # Prepare the name for the method and route
             method = service['method'].lower()
-            vars = re.findall(r'\{.*?\}', service['route'])
-            for item in vars:
-                route = service['route'].replace(item, 'with_' + item.replace("{", "").replace("}", ""))
-            basepath = '/' + service['entity'] + '/'
-            route = route.replace(basepath, "", 1)
-            dmethod = method + '_' + route
-            getobjentity = getattr(self.api_filter, service['entity'])
-            # Transform the array into a dynamic dictionary
-            dynamic_params = {item['name']: item['value'] for item in params}
-            try:
-                response = getattr(getobjentity, dmethod).run(http_client=self.http_client, **dynamic_params)
-            except requests.exceptions.HTTPError as e:
-                error_message = e.response.text if e.response else str(e)
-                raise ValueError(f"HTTP error occurred while calling service '{servicename}': {error_message}")
+
+            if method != 'get':
+                route = self.__ReplaceVarsInRoute(service['route'], service['variables'], params)
+                headers = {'api_key': self.api_key}
+                if len(body) > 0:
+                    headers['Content-Type'] = 'application/json'
+                response = self.__MakeRequest(method, f"{self.api_url}{route}", headers, json=body)
+            else:
+                vars = re.findall(r'\{.*?\}', service['route'])
+                for item in vars:
+                    route = service['route'].replace(item,'with_'+ item.replace("{","").replace("}",""))
+                basepath = '/' + service['entity'] + '/'
+                route = route.replace(basepath,"",1)
+                dmethod = method + '_' + route
+                getobjentity = getattr(self.api_filter, service['entity'])
+                # Transform the array into a dynamic dictionary
+                dynamic_params = {item['name']: item['value'] for item in params}
+                try:
+                    response = getattr(getobjentity, dmethod).run(http_client=self.http_client, **dynamic_params)
+                    
+                except requests.exceptions.HTTPError as e:
+                    error_message = e.response.text if e.response else str(e)
+                    raise ValueError(f"HTTP error occurred while calling service '{servicename}': {error_message}")            
         else:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         return response
@@ -128,8 +131,31 @@ class ServiceCatalog:
             elif itemv['required']:
                 raise ValueError(f"Service '{itemv['name']}' must be mapped in the context")
         return vars
+    
+    def __MakeRequest(self, method, url, headers=None, params=None, data=None, json=None):
+        method = method.upper() 
+        try: 
+            response = requests.request(method, url, headers=headers, params=params, data=data, json=json)
+            response.raise_for_status() 
+            return response 
+        except requests.exceptions.HTTPError as http_err:
+            print(f"HTTP error occurred: {http_err}") 
+        except Exception as err:
+            print(f"Other error occurred: {err}")
 
-# Get the catalog of services from a source
+    def __ReplaceVarsInRoute(self, route, vars, params):
+        for var in vars:
+            var_value = next((item['value'] for item in params if item['name'] == var['name']), None)
+            if var_value is None:
+                if not var['defaultvalue'] is None:
+                    var_value = var['defaultvalue']
+                else:
+                    raise ValueError(f"Service requires variable '{var['name']}'")
+            route = route.replace('{'+var['name']+'}', str(var_value), 1)
+        return route
+    
+#Get the catalog of services from a source
+
 try:
     CatalogoServicios = ServiceCatalog('source1')
     print(CatalogoServicios.routes_dict)
@@ -149,3 +175,79 @@ for i in range(1, 5):
         vars = CatalogoServicios.GetServiceVariables('getPetById')
     except ValueError as e:
         print(e)
+
+    #Clear the interface method variables
+    try:
+        vars = CatalogoServicios.ClearVars(vars)
+    except ValueError as e:
+        print(e)
+
+    ConvParams = [{ "name": "petId", "value": i }]
+
+    try:
+        vars = CatalogoServicios.MapVars(vars, ConvParams)
+    except ValueError as e:
+        print(e)
+
+    print(vars)
+
+    try:
+        response = CatalogoServicios.ExecuteService('getPetById', vars)
+        print(response)
+    except ValueError as e:
+        print(e)
+try:
+    response = CatalogoServicios.ExecuteService('deletePetById', [{ "name": "petId", "value": '1' }])
+    print(response)
+except ValueError as e:
+    print(e)
+
+try:
+    response = CatalogoServicios.ExecuteService('deletePetById', [{ "name": "petId", "value": '2' }])
+    print(response)
+except ValueError as e:
+    print(e)
+
+try:
+    body = {
+        'id': 1,
+        'category': {
+            'id': 1,
+            'name': 'Pomerania'
+        },
+        'name': 'Pepe',
+        'photoUrls': ['https://plus.unsplash.com/premium_photo-1734203007981-0cfdae356886?q=80&w=2835&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'],
+        'tags': [
+            {
+                'id': 1,
+                'name': 'small'
+            }
+        ],
+        'status': 'available'
+    }
+    response = CatalogoServicios.ExecuteService('createPet', [], body)
+    print(response.content)
+except ValueError as e:
+    print(e)
+
+try:
+    body = {
+        'id': 2,
+        'category': {
+            'id': 2,
+            'name': 'Poodle'
+        },
+        'name': 'Thormenta',
+        'photoUrls': ['https://plus.unsplash.com/premium_photo-1734203007981-0cfdae356886?q=80&w=2835&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'],
+        'tags': [
+            {
+                'id': 1,
+                'name': 'small'
+            }
+        ],
+        'status': 'available'
+    }
+    response = CatalogoServicios.ExecuteService('createPet', [], body)
+    print(response.content)
+except ValueError as e:
+    print(e)

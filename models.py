@@ -24,3 +24,4 @@ print(outputs.logits.shape)
 
 predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
 print(predictions)
+
