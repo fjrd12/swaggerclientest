@@ -1,0 +1,35 @@
+{    
+    "sources": [
+        {
+            "name": "source1",
+            "url": "https://petstore.swagger.io/v2",
+            "authkey": "1678213ghsdaj",
+            "services":[
+                {
+                    "entity": "pet",
+                    "route": "/pet/{petId}",
+                    "method": "GET",
+                    "variables": [
+                        {
+                            "name": "petId",
+                            "type": "integer",
+                            "required": true
+                        }
+                    ]
+                },
+                {
+                    "entity": "user",
+                    "route": "/getuser/{username}",
+                    "method": "GET",
+                    "variables": [
+                        {
+                            "name": "username",
+                            "type": "string",
+                            "required": true
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

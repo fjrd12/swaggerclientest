@@ -1,0 +1,43 @@
+import json
+from pyswaggerapiwrap.http_client import HttpClient
+from pyswaggerapiwrap import api_filter
+
+class ServiceCatalog:
+    def __init__(self, source):
+        with open('sources.json', 'r') as file:
+            catalog = json.load(file)
+                
+        # Find the source by name
+        self.source = next((item for item in catalog['sources'] if item['name'] == source), None)
+
+        if self.source:
+            self.http_client = HttpClient(base_url=self.source['url'], auth_token=self.source['authkey'])
+            self.routes_dict = self.http_client.get_routes_df(swagger_route="/swagger.json")
+            self.jsonapi = self.routes_dict.to_json()
+            self.services = self.source['services']
+        else:
+            raise ValueError(f"Source '{source}' not found in catalog")
+
+    def GetServiceMetadata(self,servicename):
+        service = next((item for item in self.source['services'] if item['name'] == servicename), None)
+        if service:
+            return self.source['service']
+        else:
+            raise ValueError(f"Service '{servicename}' not found in catalog")
+        
+    
+    def ExecuteService(self, servicename,args ) -> any: 
+        service = next((item for item in self.source['services'] if item['name'] == servicename), None)
+        if service:
+            self.services = self.source['services']
+            if service['name'] == 'getpet':
+                response = api_filter.pet.get_with_petId.run(http_client=http_client, petId=1635)
+            else:
+                raise ValueError(f"Service '{servicename}' not found in catalog")
+        return response
+    
+    def GetRoutes(self):
+        return self.routes_dict
+    
+CatalogoServicios = ServiceCatalog('source1')
+print(CatalogoServicios.routes_dict)
