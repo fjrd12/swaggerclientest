@@ -10,6 +10,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class ServiceCatalog:
     def __init__(self, source):
+        """
+        Initialize the ServiceCatalog with a source.
+
+        :param source: The name of the source to load from the catalog.
+        """
         with open('sources.json', 'r') as file:
             catalog = json.load(file)
                 
@@ -25,139 +30,122 @@ class ServiceCatalog:
         else:
             raise ValueError(f"Source '{source}' not found in catalog")
 
-    def GetServiceMetadata(self,servicename):
+    def GetServiceMetadata(self, servicename):
+        """
+        Get the metadata for a specific service.
+
+        :param servicename: The name of the service to retrieve metadata for.
+        :return: The service metadata.
+        :raises ValueError: If the service is not found in the catalog.
+        """
         service = next((item for item in self.source['services'] if item['name'] == servicename), None)
         if service:
             return service
         else:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         
-    def GetServiceVariables(self,servicename):
+    def GetServiceVariables(self, servicename):
+        """
+        Get the variables for a specific service.
+
+        :param servicename: The name of the service to retrieve variables for.
+        :return: A list of variables for the service.
+        :raises ValueError: If the service is not found in the catalog.
+        """
         TVars = []
         service = next((item for item in self.source['services'] if item['name'] == servicename), None)
         if service:
-            for item  in service['variables']:
-                Varkeypair = { "name": item['name'], "value": item['defaultvalue'] or None, "type": item['type'],"defaultvalue": item['defaultvalue'] ,"required": item['required']}
+            for item in service['variables']:
+                Varkeypair = { "name": item['name'], "value": item['defaultvalue'] or None, "type": item['type'], "defaultvalue": item['defaultvalue'], "required": item['required'] }
                 TVars.append(Varkeypair)
         else:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         return TVars
 
-    def ExecuteService(self, servicename,params ) -> any: 
+    def ExecuteService(self, servicename, params) -> any:
+        """
+        Execute a specific service with given parameters.
+
+        :param servicename: The name of the service to execute.
+        :param params: The parameters to pass to the service.
+        :return: The response from the service execution.
+        :raises ValueError: If the service is not found in the catalog or if an HTTP error occurs.
+        """
         service = next((item for item in self.source['services'] if item['name'] == servicename), None)
         if service: 
-            #Prepare the name fo the method and route
+            # Prepare the name of the method and route
             method = service['method'].lower()
             vars = re.findall(r'\{.*?\}', service['route'])
             for item in vars:
-                route = service['route'].replace(item,'with_'+ item.replace("{","").replace("}",""))
+                route = service['route'].replace(item, 'with_' + item.replace("{", "").replace("}", ""))
             basepath = '/' + service['entity'] + '/'
-            route = route.replace(basepath,"",1)
+            route = route.replace(basepath, "", 1)
             dmethod = method + '_' + route
             getobjentity = getattr(self.api_filter, service['entity'])
-             # Transform the array into a dynamic dictionary
+            # Transform the array into a dynamic dictionary
             dynamic_params = {item['name']: item['value'] for item in params}
             try:
                 response = getattr(getobjentity, dmethod).run(http_client=self.http_client, **dynamic_params)
-                
             except requests.exceptions.HTTPError as e:
                 error_message = e.response.text if e.response else str(e)
                 raise ValueError(f"HTTP error occurred while calling service '{servicename}': {error_message}")
-            
         else:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         return response
     
     def GetRoutes(self):
+        """
+        Get the routes dictionary.
+
+        :return: The routes dictionary.
+        """
         return self.routes_dict
 
     def ClearVars(self, vars):
+        """
+        Clear the values of the variables, setting them to their default values.
+
+        :param vars: The list of variables to clear.
+        :return: The list of variables with cleared values.
+        """
         for item in vars:
             item["value"] = item['defaultvalue'] or None
         return vars
 
     def MapVars(self, vars, context):
+        """
+        Map the variables to the context values.
+
+        :param vars: The list of variables to map.
+        :param context: The context to map the variables to.
+        :return: The list of mapped variables.
+        :raises ValueError: If a required variable is not mapped in the context.
+        """
         for itemv in vars:
             contextmap = next((item for item in context if item['name'] == itemv['name']), None)
-            if service:
+            if contextmap:
                 itemv['value'] = contextmap['value']
             elif itemv['required']:
-                raise ValueError(f"Service '{itemv['name']}' must be maped in the context")
+                raise ValueError(f"Service '{itemv['name']}' must be mapped in the context")
         return vars
-    
-#Get the catalog of services from a source
+
+# Get the catalog of services from a source
 try:
     CatalogoServicios = ServiceCatalog('source1')
     print(CatalogoServicios.routes_dict)
 except ValueError as e:
     print(e)    
-"""
-for i in range(1, 100):
-    #**************************Calling the service**************************
-    #Get the service method metadata
+
+for i in range(1, 5):
+    # **************************Calling the service**************************
+    # Get the service method metadata
     try:
         service = CatalogoServicios.GetServiceMetadata('getPetById')
     except ValueError as e:
         print(e)
 
-    #Get the service method variables
+    # Get the service method variables
     try:
         vars = CatalogoServicios.GetServiceVariables('getPetById')
     except ValueError as e:
         print(e)
-
-    #Clear the interface method variables
-    try:
-        vars = CatalogoServicios.ClearVars(vars)
-    except ValueError as e:
-        print(e)
-
-    ConvParams = [{ "name": "petId", "value": i }]
-
-    try:
-        vars = CatalogoServicios.MapVars(vars, ConvParams)
-    except ValueError as e:
-        print(e)
-
-    print(vars)
-
-    try:
-        response = CatalogoServicios.ExecuteService('getPetById', vars)
-        print(response)
-    except ValueError as e:
-        print(e)
-"""   
-    #**************************Calling the service**************************
-    #Get the service method metadata
-try:
-    service = CatalogoServicios.GetServiceMetadata('getUserByName')
-except ValueError as e:
-    print(e)
-
-#Get the service method variables
-try:
-    vars = CatalogoServicios.GetServiceVariables('getUserByName')
-except ValueError as e:
-    print(e)
-
-#Clear the interface method variables
-try:
-    vars = CatalogoServicios.ClearVars(vars)
-except ValueError as e:
-    print(e)
-
-ConvParams = [{ "name": "username", "value": 'fjrd12' }]
-
-try:
-    vars = CatalogoServicios.MapVars(vars, ConvParams)
-except ValueError as e:
-    print(e)
-
-print(vars)
-
-try:
-    response = CatalogoServicios.ExecuteService('getUserByName', vars)
-    print(response)
-except ValueError as e:
-    print(e)
-#**************************Calling the service**************************

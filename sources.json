@@ -32,6 +32,20 @@
                             "defaultvalue": 1
                         }
                     ]
+                },
+                {
+                    "name": "deleteUserByName",
+                    "entity": "user",
+                    "route": "/user/{username}",
+                    "method": "DELETE",
+                    "variables": [
+                        {
+                            "name": "username",
+                            "type": "string",
+                            "required": true,
+                            "defaultvalue": 1
+                        }
+                    ]
                 }
             ]
         }
