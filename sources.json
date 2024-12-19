@@ -22,7 +22,7 @@
                 {
                     "name": "getUserByName",
                     "entity": "user",
-                    "route": "/getuser/{username}",
+                    "route": "/user/{username}",
                     "method": "GET",
                     "variables": [
                         {

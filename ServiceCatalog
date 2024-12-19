@@ -91,7 +91,7 @@ try:
     print(CatalogoServicios.routes_dict)
 except ValueError as e:
     print(e)    
-
+"""
 for i in range(1, 100):
     #**************************Calling the service**************************
     #Get the service method metadata
@@ -126,4 +126,38 @@ for i in range(1, 100):
         print(response)
     except ValueError as e:
         print(e)
+"""   
     #**************************Calling the service**************************
+    #Get the service method metadata
+try:
+    service = CatalogoServicios.GetServiceMetadata('getUserByName')
+except ValueError as e:
+    print(e)
+
+#Get the service method variables
+try:
+    vars = CatalogoServicios.GetServiceVariables('getUserByName')
+except ValueError as e:
+    print(e)
+
+#Clear the interface method variables
+try:
+    vars = CatalogoServicios.ClearVars(vars)
+except ValueError as e:
+    print(e)
+
+ConvParams = [{ "name": "username", "value": 'fjrd12' }]
+
+try:
+    vars = CatalogoServicios.MapVars(vars, ConvParams)
+except ValueError as e:
+    print(e)
+
+print(vars)
+
+try:
+    response = CatalogoServicios.ExecuteService('getUserByName', vars)
+    print(response)
+except ValueError as e:
+    print(e)
+#**************************Calling the service**************************
