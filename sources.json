@@ -6,6 +6,7 @@
             "authkey": "1678213ghsdaj",
             "services":[
                 {
+                    "name": "getPetById",
                     "entity": "pet",
                     "route": "/pet/{petId}",
                     "method": "GET",
@@ -13,11 +14,13 @@
                         {
                             "name": "petId",
                             "type": "integer",
-                            "required": true
+                            "required": true,
+                            "defaultvalue": 1
                         }
                     ]
                 },
                 {
+                    "name": "getUserByName",
                     "entity": "user",
                     "route": "/getuser/{username}",
                     "method": "GET",
@@ -25,7 +28,8 @@
                         {
                             "name": "username",
                             "type": "string",
-                            "required": true
+                            "required": true,
+                            "defaultvalue": 1
                         }
                     ]
                 }
