@@ -32,6 +32,52 @@
                             "defaultvalue": 1
                         }
                     ]
+                },
+                {
+                    "name": "deletePetById",
+                    "entity": "pet",
+                    "route": "/pet/{petId}",
+                    "method": "DELETE",
+                    "variables": [
+                        {
+                            "name": "petId",
+                            "type": "integer",
+                            "required": true,
+                            "defaultvalue": 1
+                        }
+                    ]
+                },
+                {
+                    "name": "createPet",
+                    "entity": "pet",
+                    "route": "/pet",
+                    "method": "POST",
+                    "variables": [],
+                    "body": [
+                        {
+                            "name": "pet",
+                            "type": "object",
+                            "required": true,
+                            "defaultvalue": {
+                                "id": 0,
+                                "category": {
+                                    "id": 0,
+                                    "name": "string"
+                                },
+                                "name": "doggie",
+                                "photoUrls": [
+                                    "string"
+                                ],
+                                "tags": [
+                                    {
+                                        "id": 0,
+                                        "name": "string"
+                                    }
+                                ],
+                                "status": "available"
+                            }
+                        }
+                    ]
                 }
             ]
         }
