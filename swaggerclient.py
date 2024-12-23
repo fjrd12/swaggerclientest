@@ -31,6 +31,7 @@ print("==================Routes of swagger==================")
 print(routes_dict)
 api_filter = APIDataFrameFilter(routes_dict)
 out = api_filter.filter(method="GET")
+
 print("==================All get methods====================")
 print(out)
 print("==================Get Methods applied================")

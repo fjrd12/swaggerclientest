@@ -1,0 +1,33 @@
+{    
+    "sources": [
+        {
+            "name": "source2",
+            "url": "http://127.0.0.1:5000",
+            "authkey": "Very compliacted key",
+            "services":[
+                {
+                    "name": "GetCategories",
+                    "entity": "api",
+                    "route": "/api/categories/",
+                    "method": "GET",
+                    "variables": [
+                    ]
+                }
+                ,
+                {
+                    "name": "createcategory",
+                    "entity": "api",
+                    "route": "/api/categories",
+                    "method": "POST",
+                    "variables": [],
+                    "body": [
+                        {
+                            "name": "New Category",
+                            "category_id": 10                
+                        }
+                    ]
+                }                
+            ]
+        }
+    ]
+}

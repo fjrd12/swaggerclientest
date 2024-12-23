@@ -15,7 +15,7 @@ class ServiceCatalog:
 
         :param source: The name of the source to load from the catalog.
         """
-        with open('sources.json', 'r') as file:
+        with open(source+'.json', 'r') as file:
             catalog = json.load(file)
                 
         # Find the source by name
@@ -42,7 +42,7 @@ class ServiceCatalog:
         """
         service = next((item for item in self.source['services'] if item['name'] == servicename), None)
         if service:
-            return service
+            return service,self.GetServiceVariables(servicename)
         else:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         
@@ -64,34 +64,48 @@ class ServiceCatalog:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         return TVars
 
-    def ExecuteService(self, servicename, params=[], body={}) -> any: 
+    def ExecuteService(self, servicename, context=[], body={}) -> any: 
+        params= []
         service = next((item for item in self.source['services'] if item['name'] == servicename), None)
         if service: 
-            # Prepare the name for the method and route
-            method = service['method'].lower()
-
-            if method != 'get':
-                route = self.__ReplaceVarsInRoute(service['route'], service['variables'], params)
-                headers = {'api_key': self.api_key}
-                if len(body) > 0:
-                    headers['Content-Type'] = 'application/json'
-                response = self.__MakeRequest(method, f"{self.api_url}{route}", headers, json=body)
-            else:
-                vars = re.findall(r'\{.*?\}', service['route'])
-                for item in vars:
-                    route = service['route'].replace(item,'with_'+ item.replace("{","").replace("}",""))
-                basepath = '/' + service['entity'] + '/'
-                route = route.replace(basepath,"",1)
-                dmethod = method + '_' + route
-                getobjentity = getattr(self.api_filter, service['entity'])
-                # Transform the array into a dynamic dictionary
-                dynamic_params = {item['name']: item['value'] for item in params}
+            # Get the service method metadata
+            try:
+                service,variables = self.GetServiceMetadata(servicename)
+                variables = self.ClearVars(variables)
                 try:
-                    response = getattr(getobjentity, dmethod).run(http_client=self.http_client, **dynamic_params)
-                    
-                except requests.exceptions.HTTPError as e:
-                    error_message = e.response.text if e.response else str(e)
-                    raise ValueError(f"HTTP error occurred while calling service '{servicename}': {error_message}")            
+                    params = self.MapVars(variables, context)
+                except ValueError as e: 
+                    raise ValueError(f"Service '{servicename}' not found in catalog")
+
+                # Prepare the name for the method and route
+                method = service['method'].lower()
+                route = service['route']
+                if method != 'get':
+                    route = self.__ReplaceVarsInRoute(service['route'], service['variables'], params)
+                    headers = {'api_key': self.api_key}
+                    if len(body) > 0:
+                        headers['Content-Type'] = 'application/json'
+                    response = self.__MakeRequest(method, f"{self.api_url}{route}", headers, json=body)
+                else:
+                    vars = re.findall(r'\{.*?\}', service['route'])
+                    for item in vars:
+                        route = service['route'].replace(item,'with_'+ item.replace("{","").replace("}",""))
+                    basepath = '/' + service['entity'] + '/'
+                    route = route.replace(basepath,"",1)
+                    if route.endswith('/'):
+                        route = route[:-1] + "_"
+                    dmethod = method + '_' + route
+                    getobjentity = getattr(self.api_filter, service['entity'])
+                    # Transform the array into a dynamic dictionary
+                    dynamic_params = {item['name']: item['value'] for item in params}
+                    try:
+                        response = getattr(getobjentity, dmethod).run(http_client=self.http_client, **dynamic_params)
+                        
+                    except requests.exceptions.HTTPError as e:
+                        error_message = e.response.text if e.response else str(e)
+                        raise ValueError(f"HTTP error occurred while calling service '{servicename}': {error_message}")            
+            except ValueError as e:
+                raise ValueError(f"Service '{servicename}' not found in catalog")
         else:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         return response
@@ -129,7 +143,7 @@ class ServiceCatalog:
             if contextmap:
                 itemv['value'] = contextmap['value']
             elif itemv['required']:
-                raise ValueError(f"Service '{itemv['name']}' must be mapped in the context")
+                raise ValueError(f"Variable '{itemv['name']}' is not provided in the context and for method is obligatory")
         return vars
     
     def __MakeRequest(self, method, url, headers=None, params=None, data=None, json=None):
@@ -153,101 +167,3 @@ class ServiceCatalog:
                     raise ValueError(f"Service requires variable '{var['name']}'")
             route = route.replace('{'+var['name']+'}', str(var_value), 1)
         return route
-    
-#Get the catalog of services from a source
-
-try:
-    CatalogoServicios = ServiceCatalog('source1')
-    print(CatalogoServicios.routes_dict)
-except ValueError as e:
-    print(e)    
-
-for i in range(1, 5):
-    # **************************Calling the service**************************
-    # Get the service method metadata
-    try:
-        service = CatalogoServicios.GetServiceMetadata('getPetById')
-    except ValueError as e:
-        print(e)
-
-    # Get the service method variables
-    try:
-        vars = CatalogoServicios.GetServiceVariables('getPetById')
-    except ValueError as e:
-        print(e)
-
-    #Clear the interface method variables
-    try:
-        vars = CatalogoServicios.ClearVars(vars)
-    except ValueError as e:
-        print(e)
-
-    ConvParams = [{ "name": "petId", "value": i }]
-
-    try:
-        vars = CatalogoServicios.MapVars(vars, ConvParams)
-    except ValueError as e:
-        print(e)
-
-    print(vars)
-
-    try:
-        response = CatalogoServicios.ExecuteService('getPetById', vars)
-        print(response)
-    except ValueError as e:
-        print(e)
-try:
-    response = CatalogoServicios.ExecuteService('deletePetById', [{ "name": "petId", "value": '1' }])
-    print(response)
-except ValueError as e:
-    print(e)
-
-try:
-    response = CatalogoServicios.ExecuteService('deletePetById', [{ "name": "petId", "value": '2' }])
-    print(response)
-except ValueError as e:
-    print(e)
-
-try:
-    body = {
-        'id': 1,
-        'category': {
-            'id': 1,
-            'name': 'Pomerania'
-        },
-        'name': 'Pepe',
-        'photoUrls': ['https://plus.unsplash.com/premium_photo-1734203007981-0cfdae356886?q=80&w=2835&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'],
-        'tags': [
-            {
-                'id': 1,
-                'name': 'small'
-            }
-        ],
-        'status': 'available'
-    }
-    response = CatalogoServicios.ExecuteService('createPet', [], body)
-    print(response.content)
-except ValueError as e:
-    print(e)
-
-try:
-    body = {
-        'id': 2,
-        'category': {
-            'id': 2,
-            'name': 'Poodle'
-        },
-        'name': 'Thormenta',
-        'photoUrls': ['https://plus.unsplash.com/premium_photo-1734203007981-0cfdae356886?q=80&w=2835&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'],
-        'tags': [
-            {
-                'id': 1,
-                'name': 'small'
-            }
-        ],
-        'status': 'available'
-    }
-    response = CatalogoServicios.ExecuteService('createPet', [], body)
-    print(response.content)
-except ValueError as e:
-    print(e)

@@ -43,5 +43,53 @@ for i, prediction in enumerate(predictions_list):
 
 print(results)
 
+#***********************************************Tokenization********************************
 
+tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
 
+sequence = "Using a Transformer network is simple"
+tokens = tokenizer.tokenize(sequence)
+print(tokens)
+ids = tokenizer.convert_tokens_to_ids(tokens)
+print(ids)
+decoded_string = tokenizer.decode(ids)
+print(decoded_string)
+
+#******************************************Handling multiples sequences*********************
+checkpoint = "distilbert-base-uncased-finetuned-sst-2-english"
+tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+model = AutoModelForSequenceClassification.from_pretrained(checkpoint)
+
+sequence = "I've been waiting for a HuggingFace course my whole life."
+
+tokens = tokenizer.tokenize(sequence)
+ids = tokenizer.convert_tokens_to_ids(tokens)
+
+input_ids = torch.tensor([ids])
+print("Input IDs:", input_ids)
+
+output = model(input_ids)
+print("Logits:", output.logits)
+
+batched_ids = [ids, ids]
+print(batched_ids)
+
+padding_id = 100
+
+batched_ids2 = [
+    [200, 200, 200],
+    [200, 200, padding_id],
+]
+
+tensor = torch.tensor(batched_ids2)
+
+sequence1_ids = [[200, 200, 200]]
+sequence2_ids = [[200, 200]]
+batched_ids = [
+    [200, 200, 200],
+    [200, 200, tokenizer.pad_token_id],
+]
+
+print(model(torch.tensor(sequence1_ids)).logits)
+print(model(torch.tensor(sequence2_ids)).logits)
+print(model(torch.tensor(batched_ids)).logits)
