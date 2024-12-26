@@ -13,7 +13,11 @@ try:
     print(response)
 except ValueError as e:
     print(e)
-
+try:
+    response = CatalogoServicios.ExecuteService('getUsers', [])
+    print(response)
+except ValueError as e:
+    print(e)
 
 try:
     body = {

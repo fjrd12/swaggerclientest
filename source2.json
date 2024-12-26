@@ -26,7 +26,14 @@
                             "category_id": 10                
                         }
                     ]
-                }                
+                },
+                {
+                    "name": "getUsers",
+                    "entity": "api",
+                    "route": "/api/users/",
+                    "method": "GET",
+                    "variables": []
+                }            
             ]
         }
     ]
