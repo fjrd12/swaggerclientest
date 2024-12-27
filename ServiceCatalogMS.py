@@ -6,33 +6,69 @@ from pyswaggerapiwrap.api_filter import APIDataFrameFilter
 import re
 import requests
 import urllib3
+import yaml
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
 
 # Disable InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-class ServiceCatalog:
-    def __init__(self, source):
+class ServiceCatalogMS:
+    def __init__(self):
         """
         Initialize the ServiceCatalog with a source.
         :param source: The name of the source to load from the catalog.
         """
-        with open(source+'.json', 'r') as file:
-            catalog = json.load(file)
-                
-        # Find the source by name
-        self.source = next((item for item in catalog['sources'] if item['name'] == source), None)
+        # Try to load the configuration from the config.yaml file
+        try:
+            with open("config.yaml", "r") as file:
+                config = yaml.safe_load(file)
+            try:
+                # Validate the configuration
+                if self.ValidConfig(config):
+                    mongodb_config = config['mongodb']
+                    uri = mongodb_config['uri']
+                    server_api_version = mongodb_config['server_api_version']
+                    tls = mongodb_config['tls']
+                    tls_allow_invalid_certificates = mongodb_config['tls_allow_invalid_certificates']
+                    # Connect to the MongoDB service
+                    client = MongoClient(uri, server_api=ServerApi(server_api_version), tls=tls, tlsAllowInvalidCertificates=tls_allow_invalid_certificates)
+                    # Validate the connection
+                    try:
+                        client.admin.command('ping')
+                        print("Pinged your deployment. You successfully connected to MongoDB!")
+                    except Exception as e:
+                     print(e)
+            except Exception as e:
+                print(e)
+            try:
+                client.admin.command('ping')
+                print("Pinged your deployment. You successfully connected to MongoDB!")
+            except Exception as e:
+                print(e)
+        except FileNotFoundError:
+            print("The file config.yaml is not found.")
+        except yaml.YAMLError as exc:
+            print(f"Config.YAML cannot be read: {exc}")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
 
-        if self.source:
-            self.http_client = HttpClient(base_url=self.source['url'], auth_token=self.source['authkey'])
-            self.routes_dict = self.http_client.get_routes_df(swagger_route="/swagger.json")
-            self.jsonraw = find_swagger_json(self.source['url'])
-            self.jsonapi = self.routes_dict.to_json()
-            self.services = self.source['services']
-            self.api_filter = APIDataFrameFilter(self.routes_dict)    
-            self.api_url = self.source['url']
-            self.api_key = self.source['authkey']     
-        else:
-            raise ValueError(f"Source '{source}' not found in catalog")
+    def ValidConfig(config):
+        """
+        Validate the configuration.
+        :config: The configuration to validate.
+        """
+        if 'mongodb' not in config:
+            raise KeyError("The config mongodb is not in config.yaml.")
+        if 'uri' not in config:
+            raise KeyError("The uri of the connection is not in config.yaml.")
+        if 'server_api_version' not in config:
+            raise KeyError("The server_api_version is not in config.yaml.")
+        if 'tls' not in config:
+            raise KeyError("The tls is not in config.yaml.")
+        if 'tls_allow_invalid_certificates' not in config:
+            raise KeyError("The tls_allow_invalid_certificates is not in config.yaml.")
+        return True
 
     def GetServiceMetadata(self, servicename):
         """
@@ -51,7 +87,6 @@ class ServiceCatalog:
     def GetServiceVariables(self, servicename):
         """
         Get the variables for a specific service.
-
         :param servicename: The name of the service to retrieve variables for.
         :return: A list of variables for the service.
         :raises ValueError: If the service is not found in the catalog.

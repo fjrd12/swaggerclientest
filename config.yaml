@@ -1,0 +1,5 @@
+mongodb:
+  uri: "mongodb+srv://fjrd12:Rjon2457@cluster0.6zswh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+  server_api_version: "1"
+  tls: true
+  tls_allow_invalid_certificates: true
