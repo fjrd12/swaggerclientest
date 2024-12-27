@@ -2,4 +2,7 @@ from ServiceCatalogMS import ServiceCatalogMS
 
 # Create a new ServiceCatalog instance
 catalog = ServiceCatalogMS()
-catalog.CreateCatalog('https://petstore.swagger.io/v2','Petstore','token')
+try:
+    catalog.CreateCatalog('https://petstore.swagger.io/v2','Petstore','token')
+except Exception as e:
+    print(e)

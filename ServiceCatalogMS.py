@@ -37,9 +37,9 @@ class ServiceCatalogMS:
                     # Validate the connection
                     try:
                         client.admin.command('ping')
-                        print("Succesfully connected to presistent storage.{} ")
+                        print(f"Succesfully connected to presistent storage {mongodb_config['dbname']}")
                         if mongodb_config['dbname'] in client.list_database_names():
-                            self.persistentApi = client[mongodb_config['dbname']]
+                            self.database = client[mongodb_config['dbname']]
                         else:
                             self.InitDb(client, mongodb_config['dbname'])
                     except errors.PyMongoError as e:
@@ -88,10 +88,10 @@ class ServiceCatalogMS:
         :param source_url: The source to import the catalog from.
         """
         #Validate if there is any service associated with the source url 
-        Catalog = self.persistentApi.ServiceCatalog["ServiceCatalog"]
-        documents = Catalog.find({ "$or": [ { "source_url":  source_url}, { "catalogname": Catalogname } ] })
-        documents = self.persistentApi.ServiceCatalog.find({ "source_url":  source_url})
-        if documents.retrieved == 0:
+        collection = self.database["ServiceCatalog"]
+        documents = None
+        documents = collection.find_one({ "$or": [ { "source_url":  source_url}, { "catalogname": Catalogname } ] })
+        if not documents:
             try:
                 http_client = HttpClient(base_url=source_url, auth_token=authkey)
                 routes_dict = http_client.get_routes_df(swagger_route="/swagger.json")
@@ -103,7 +103,7 @@ class ServiceCatalogMS:
                                  "jsonraw": find_swagger_json(source_url),
                                  "services": routes_dict.to_json()
                                 }
-                self.persistentApi.ServiceCatalog.insert_one(Catalogentry)
+                collection.insert_one(Catalogentry)
             except ValueError as e:
                 raise ValueError(f"Source '{source_url}' not found in catalog") 
         else:
