@@ -39,7 +39,7 @@ class ServiceCatalogMS:
                         client.admin.command('ping')
                         print("Succesfully connected to presistent storage.{} ")
                         if mongodb_config['dbname'] in client.list_database_names():
-                            self.db = client[mongodb_config['dbname']]
+                            self.persistentApi = client[mongodb_config['dbname']]
                         else:
                             self.InitDb(client, mongodb_config['dbname'])
                     except errors.PyMongoError as e:
@@ -60,22 +60,11 @@ class ServiceCatalogMS:
         """
         if 'mongodb' not in config:
             raise KeyError("The config mongodb is not in config.yaml.")
-        else:
-            mongodb_config = config['mongodb']  
-        if 'uri' not in mongodb_config:
-            raise KeyError("The uri of the connection is not in config.yaml.")
-        if 'server_api_version' not in mongodb_config:
-            raise KeyError("The server_api_version is not in config.yaml.")
-        if 'tls' not in mongodb_config:
-            raise KeyError("The tls is not in config.yaml.")
-        if 'tls_allow_invalid_certificates' not in mongodb_config:
-            raise KeyError("The tls_allow_invalid_certificates is not in config.yaml.")
-        if 'username' not in mongodb_config:
-            raise KeyError("The username is not in config.yaml.")
-        if 'password' not in mongodb_config:
-            raise KeyError("The password is not in config.yaml.")
-        if  'dbname' not in mongodb_config:
-            raise KeyError("The database is not configured in config.yaml.")
+            
+        required_keys = ['uri','server_api_version','tls','tls_allow_invalid_certificates', 'username', 'password', 'dbname']
+        for key in required_keys:
+            if key not in config['mongodb']:
+                raise KeyError(f"The {key} is not in config.yaml.")
         return True
     
     def InitDb(self, client, dbname):
@@ -93,6 +82,32 @@ class ServiceCatalogMS:
         except Exception as e:
             print(f"Unexpected error: {e}")
 
+    def CreateCatalog(self, source_url,Catalogname,authkey=None):
+        """
+        Import the catalog from a source.
+        :param source_url: The source to import the catalog from.
+        """
+        #Validate if there is any service associated with the source url 
+        Catalog = self.persistentApi.ServiceCatalog["ServiceCatalog"]
+        documents = Catalog.find({ "$or": [ { "source_url":  source_url}, { "catalogname": Catalogname } ] })
+        documents = self.persistentApi.ServiceCatalog.find({ "source_url":  source_url})
+        if documents.retrieved == 0:
+            try:
+                http_client = HttpClient(base_url=source_url, auth_token=authkey)
+                routes_dict = http_client.get_routes_df(swagger_route="/swagger.json")
+                Catalogentry = { 
+                                 "catalogname":  Catalogname, 
+                                 "source_url": source_url, 
+                                 "authkey": authkey, 
+                                 "version": 1,
+                                 "jsonraw": find_swagger_json(source_url),
+                                 "services": routes_dict.to_json()
+                                }
+                self.persistentApi.ServiceCatalog.insert_one(Catalogentry)
+            except ValueError as e:
+                raise ValueError(f"Source '{source_url}' not found in catalog") 
+        else:
+            raise ValueError(f"Catalog '{Catalogname}' already exists in the database")
 
     def GetServiceMetadata(self, servicename):
         """
