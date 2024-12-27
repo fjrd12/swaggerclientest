@@ -1,5 +1,8 @@
 mongodb:
-  uri: "mongodb+srv://fjrd12:Rjon2457@cluster0.6zswh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+  uri: "cluster0.6zswh.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
   server_api_version: "1"
+  password: "Rjon2457"
+  username: "fjrd12"
+  dbname: "ServiceCatalog"
   tls: true
   tls_allow_invalid_certificates: true

@@ -8,6 +8,7 @@ import requests
 import urllib3
 import yaml
 from pymongo.mongo_client import MongoClient
+from pymongo import errors
 from pymongo.server_api import ServerApi
 
 # Disable InsecureRequestWarning
@@ -27,7 +28,7 @@ class ServiceCatalogMS:
                 # Validate the configuration
                 if self.ValidConfig(config):
                     mongodb_config = config['mongodb']
-                    uri = mongodb_config['uri']
+                    uri = "mongodb+srv://" + mongodb_config['username'] + ":" + mongodb_config['password']+ "@" +mongodb_config['uri']
                     server_api_version = mongodb_config['server_api_version']
                     tls = mongodb_config['tls']
                     tls_allow_invalid_certificates = mongodb_config['tls_allow_invalid_certificates']
@@ -36,14 +37,13 @@ class ServiceCatalogMS:
                     # Validate the connection
                     try:
                         client.admin.command('ping')
-                        print("Pinged your deployment. You successfully connected to MongoDB!")
-                    except Exception as e:
-                     print(e)
-            except Exception as e:
-                print(e)
-            try:
-                client.admin.command('ping')
-                print("Pinged your deployment. You successfully connected to MongoDB!")
+                        print("Succesfully connected to presistent storage.{} ")
+                        if mongodb_config['dbname'] in client.list_database_names():
+                            self.db = client[mongodb_config['dbname']]
+                        else:
+                            self.InitDb(client, mongodb_config['dbname'])
+                    except errors.PyMongoError as e:
+                        print(f"An error occurred: {e}")
             except Exception as e:
                 print(e)
         except FileNotFoundError:
@@ -53,22 +53,46 @@ class ServiceCatalogMS:
         except Exception as e:
             print(f"Unexpected error: {e}")
 
-    def ValidConfig(config):
+    def ValidConfig(self, config):
         """
         Validate the configuration.
         :config: The configuration to validate.
         """
         if 'mongodb' not in config:
             raise KeyError("The config mongodb is not in config.yaml.")
-        if 'uri' not in config:
+        else:
+            mongodb_config = config['mongodb']  
+        if 'uri' not in mongodb_config:
             raise KeyError("The uri of the connection is not in config.yaml.")
-        if 'server_api_version' not in config:
+        if 'server_api_version' not in mongodb_config:
             raise KeyError("The server_api_version is not in config.yaml.")
-        if 'tls' not in config:
+        if 'tls' not in mongodb_config:
             raise KeyError("The tls is not in config.yaml.")
-        if 'tls_allow_invalid_certificates' not in config:
+        if 'tls_allow_invalid_certificates' not in mongodb_config:
             raise KeyError("The tls_allow_invalid_certificates is not in config.yaml.")
+        if 'username' not in mongodb_config:
+            raise KeyError("The username is not in config.yaml.")
+        if 'password' not in mongodb_config:
+            raise KeyError("The password is not in config.yaml.")
+        if  'dbname' not in mongodb_config:
+            raise KeyError("The database is not configured in config.yaml.")
         return True
+    
+    def InitDb(self, client, dbname):
+        """
+        Initialize the database.
+        :param client: The client to connect to the database.
+        :param dbname: The name of the database to initialize.
+        """
+        try:
+            db = client[dbname]
+            db.create_collection('ServiceCatalog')
+            db.create_collection('ServiceCatalogVersion')
+            db.create_collection('ServiceRawData')
+            self.persistentApi = db
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+
 
     def GetServiceMetadata(self, servicename):
         """
