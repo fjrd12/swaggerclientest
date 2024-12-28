@@ -150,6 +150,16 @@ class ServiceCatalogMS:
             #Delete the catalog
             documents = collection.delete_many({ "_id":  documents['_id'] })
         return f"Catalog {catalogname} deleted"
+    
+    def GetCatalog(self):
+        """
+        Get catalog list
+        """
+        #Get the catalog
+        collection = self.database["ServiceCatalog"]
+        documents = None
+        documents = collection.find({})
+        return documents
 
     def RetrieveVersion(self,source_url,version):
         """
