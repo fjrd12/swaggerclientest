@@ -110,7 +110,6 @@ class ServiceCatalogMS:
                 #Get the relatinship with the version and set the current version
                 Catalogentry['version_id'] = record_id
                 record = collection.insert_one(Catalogentry)
-
             except ValueError as e:
                 raise ValueError(f"Source '{source_url}' not found in catalog") 
         else:
@@ -151,7 +150,51 @@ class ServiceCatalogMS:
             #Delete the catalog
             documents = collection.delete_many({ "_id":  documents['_id'] })
         return f"Catalog {catalogname} deleted"
-    
+
+    def RetrieveVersion(self,source_url,version):
+        """
+        Import the catalog from a source.
+        :param source_url: The source to import the catalog from.
+        """
+        #Validate if there is any service associated with the source url 
+        collectionv = self.database["ServiceCatalogVersion"]
+        collection = self.database["ServiceCatalog"]
+        document = None
+        document  = collection.find_one({ "$or": [ { "source_url":  source_url} ] })
+        if document:
+            query = {
+                        "$or": [
+                            {"source_url": source_url}
+                        ],
+                        "$and": [
+                            {"version": version}
+                        ]
+                    }
+            documentsv  = collectionv.find( query)        
+            try:
+                try:
+                    itemv = documentsv[0]
+                    Catalogentry = { 
+                                    "catalogname":  itemv['catalogname'], 
+                                    "source_url": itemv['source_url'], 
+                                    "authkey": itemv['authkey'], 
+                                    "version": itemv['version'],
+                                    "jsonraw": itemv['jsonraw'],
+                                    "services": itemv['services']
+                                    }
+                    #Get the relationship with the version and set the current version
+                    Catalogentry['version_id'] = itemv['_id']
+                    collection = self.database["ServiceCatalog"]
+                    record = collection.insert_one(Catalogentry)
+                    #Delete the previous version
+                    self.DeleteVersion(source_url,document['version'])
+                except IndexError as e:
+                    print(f"The version {version} does not exists for the catalog {document['catalogname']}")
+            except ValueError as e:
+                raise ValueError(f"Source '{source_url}' not found in catalog") 
+        else:
+            raise ValueError(f"Catalog '{itemv['catalogname']}' does not exists in the database")
+        
     def RefreshCatalog(self, source_url,Catalogname,authkey=None):
         """
         Import the catalog from a source.
@@ -185,7 +228,7 @@ class ServiceCatalogMS:
                 collection = self.database["ServiceCatalog"]
                 record = collection.insert_one(Catalogentry)
                 #Delete the previous version
-                self.DeleteVersion(source_url,itemv['version'])
+                self.DeleteVersion(source_url,documents['version'])
 
             except ValueError as e:
                 raise ValueError(f"Source '{source_url}' not found in catalog") 
@@ -234,7 +277,6 @@ class ServiceCatalogMS:
                     params = self.MapVars(variables, context)
                 except ValueError as e: 
                     raise ValueError(f"Service '{servicename}' not found in catalog")
-
                 # Prepare the name for the method and route
                 method = service['method'].lower()
                 route = service['route']
