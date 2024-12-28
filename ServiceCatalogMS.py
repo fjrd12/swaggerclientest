@@ -77,7 +77,6 @@ class ServiceCatalogMS:
             db = client[dbname]
             db.create_collection('ServiceCatalog')
             db.create_collection('ServiceCatalogVersion')
-            db.create_collection('ServiceRawData')
             self.persistentApi = db
         except Exception as e:
             print(f"Unexpected error: {e}")
@@ -145,15 +144,13 @@ class ServiceCatalogMS:
         collection = self.database["ServiceCatalog"]
         documents = None
         documents = collection.find_one( { "source_url":  source_url, "version": Version })
+        catalogname = documents['catalogname']
         if not documents:
             raise ValueError(f"Catalog {documents['catalogname']}, version {Version} not found")
         else:
             #Delete the catalog
             documents = collection.delete_many({ "_id":  documents['_id'] })
-            #Delete the versions associated with the catalog
-            collection = self.database["ServiceCatalogVersion"]
-            documents = collection.delete_many({ "source_url": source_url })
-        return f"Catalog {documents['catalogname']} deleted"
+        return f"Catalog {catalogname} deleted"
     
     def RefreshCatalog(self, source_url,Catalogname,authkey=None):
         """
@@ -166,17 +163,18 @@ class ServiceCatalogMS:
         documents = None
         documents  = collection.find_one({ "$or": [ { "source_url":  source_url}, { "catalogname": Catalogname } ] })
         if documents:
-            documentsv  = collectionv.find_one({ "$or": [ { "source_url":  source_url}, { "catalogname": Catalogname }, {"version:": documents["version"]} ] })        
+            documentsv  = collectionv.find({ "$or": [ { "source_url":  source_url}, { "catalogname": Catalogname } ] }).sort({"_id":-1}).limit(1)        
             try:
+                itemv = documentsv[0]
                 # Get the routes dictionary
-                http_client = HttpClient(base_url=source_url, documents=documents['authkey'])
+                http_client = HttpClient(base_url=source_url, auth_token=documents['authkey'])
                 #Construct the version of the catalog
                 routes_dict = http_client.get_routes_df(swagger_route="/swagger.json")
                 Catalogentry = { 
                                  "catalogname":  Catalogname, 
                                  "source_url": source_url, 
-                                 "authkey": authkey, 
-                                 "version": documentsv['version'] + 1,
+                                 "authkey": documents['authkey'], 
+                                 "version": itemv['version'] + 1,
                                  "jsonraw": find_swagger_json(source_url),
                                  "services": routes_dict.to_json()
                                 }
@@ -186,6 +184,8 @@ class ServiceCatalogMS:
                 Catalogentry['version_id'] = record_id
                 collection = self.database["ServiceCatalog"]
                 record = collection.insert_one(Catalogentry)
+                #Delete the previous version
+                self.DeleteVersion(source_url,itemv['version'])
 
             except ValueError as e:
                 raise ValueError(f"Source '{source_url}' not found in catalog") 
@@ -195,7 +195,6 @@ class ServiceCatalogMS:
     def GetServiceMetadata(self, servicename):
         """
         Get the metadata for a specific service.
-
         :param servicename: The name of the service to retrieve metadata for.
         :return: The service metadata.
         :raises ValueError: If the service is not found in the catalog.
@@ -272,7 +271,6 @@ class ServiceCatalogMS:
     def GetRoutes(self):
         """
         Get the routes dictionary.
-
         :return: The routes dictionary.
         """
         return self.routes_dict
@@ -280,7 +278,6 @@ class ServiceCatalogMS:
     def ClearVars(self, vars):
         """
         Clear the values of the variables, setting them to their default values.
-
         :param vars: The list of variables to clear.
         :return: The list of variables with cleared values.
         """
