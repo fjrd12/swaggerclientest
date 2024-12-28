@@ -13,7 +13,7 @@ try:
     #print("Found document:", document)
     source_url = "https://petstore.swagger.io/v2"
     Catalogname = "Petstore"
-    document = collection.find({"$or": [ { "source_url":  source_url}, { "catalogname": Catalogname } ]})
+    document = collection.find_one({"$or": [ { "source_url":  source_url}, { "catalogname": Catalogname } ]})
     print("Found document:", document)
 except Exception as e:
     print(e)

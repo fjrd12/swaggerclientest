@@ -90,10 +90,13 @@ class ServiceCatalogMS:
         #Validate if there is any service associated with the source url 
         collection = self.database["ServiceCatalog"]
         documents = None
+        collectionv = self.database["ServiceCatalogVersion"]
         documents = collection.find_one({ "$or": [ { "source_url":  source_url}, { "catalogname": Catalogname } ] })
         if not documents:
             try:
+                # Get the routes dictionary
                 http_client = HttpClient(base_url=source_url, auth_token=authkey)
+                #Construct the version of the catalog
                 routes_dict = http_client.get_routes_df(swagger_route="/swagger.json")
                 Catalogentry = { 
                                  "catalogname":  Catalogname, 
@@ -103,12 +106,92 @@ class ServiceCatalogMS:
                                  "jsonraw": find_swagger_json(source_url),
                                  "services": routes_dict.to_json()
                                 }
-                collection.insert_one(Catalogentry)
+                record = collectionv.insert_one(Catalogentry)
+                record_id = record.inserted_id
+                #Get the relatinship with the version and set the current version
+                Catalogentry['version_id'] = record_id
+                record = collection.insert_one(Catalogentry)
+
             except ValueError as e:
                 raise ValueError(f"Source '{source_url}' not found in catalog") 
         else:
             raise ValueError(f"Catalog '{Catalogname}' already exists in the database")
 
+    def DeleteCatalog(self, source_url,Catalogname,authkey=None):
+        """
+        Import the catalog from a source.
+        :param source_url: The source to import the catalog from.
+        """
+        #Get the catalog
+        collection = self.database["ServiceCatalog"]
+        documents = None
+        documents = collection.find_one({ "$or": [ { "source_url":  source_url}, { "catalogname": Catalogname } ] })
+        if not documents:
+            raise ValueError(f"Catalog '{Catalogname}' not found in the database")
+        else:
+            #Delete the catalog
+            documents = collection.delete_many({ "_id":  documents['_id'] })
+            #Delete the versions associated with the catalog
+            collection = self.database["ServiceCatalogVersion"]
+            documents = collection.delete_many({ "source_url": source_url })
+        return f"Catalog '{Catalogname}' deleted"
+    
+    def DeleteVersion(self, source_url, Version):
+        """
+        Import the catalog from a source.
+        :param source_url: The source to import the catalog from.
+        """
+        #Get the catalog
+        collection = self.database["ServiceCatalog"]
+        documents = None
+        documents = collection.find_one( { "source_url":  source_url, "version": Version })
+        if not documents:
+            raise ValueError(f"Catalog {documents['catalogname']}, version {Version} not found")
+        else:
+            #Delete the catalog
+            documents = collection.delete_many({ "_id":  documents['_id'] })
+            #Delete the versions associated with the catalog
+            collection = self.database["ServiceCatalogVersion"]
+            documents = collection.delete_many({ "source_url": source_url })
+        return f"Catalog {documents['catalogname']} deleted"
+    
+    def RefreshCatalog(self, source_url,Catalogname,authkey=None):
+        """
+        Import the catalog from a source.
+        :param source_url: The source to import the catalog from.
+        """
+        #Validate if there is any service associated with the source url 
+        collectionv = self.database["ServiceCatalogVersion"]
+        collection = self.database["ServiceCatalog"]
+        documents = None
+        documents  = collection.find_one({ "$or": [ { "source_url":  source_url}, { "catalogname": Catalogname } ] })
+        if documents:
+            documentsv  = collectionv.find_one({ "$or": [ { "source_url":  source_url}, { "catalogname": Catalogname }, {"version:": documents["version"]} ] })        
+            try:
+                # Get the routes dictionary
+                http_client = HttpClient(base_url=source_url, documents=documents['authkey'])
+                #Construct the version of the catalog
+                routes_dict = http_client.get_routes_df(swagger_route="/swagger.json")
+                Catalogentry = { 
+                                 "catalogname":  Catalogname, 
+                                 "source_url": source_url, 
+                                 "authkey": authkey, 
+                                 "version": documentsv['version'] + 1,
+                                 "jsonraw": find_swagger_json(source_url),
+                                 "services": routes_dict.to_json()
+                                }
+                record = collectionv.insert_one(Catalogentry)
+                record_id = record.inserted_id
+                #Get the relationship with the version and set the current version
+                Catalogentry['version_id'] = record_id
+                collection = self.database["ServiceCatalog"]
+                record = collection.insert_one(Catalogentry)
+
+            except ValueError as e:
+                raise ValueError(f"Source '{source_url}' not found in catalog") 
+        else:
+            raise ValueError(f"Catalog '{Catalogname}' does not exists in the database")
+        
     def GetServiceMetadata(self, servicename):
         """
         Get the metadata for a specific service.
