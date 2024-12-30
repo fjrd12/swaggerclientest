@@ -181,8 +181,9 @@ class ServiceCatalogMS:
             documentsv  = collectionv.find( query)        
             try:
                 try:
-                    itemv = documentsv[0]
-                    Catalogentry = { 
+                    try:
+                        itemv = documentsv[0]
+                        Catalogentry = { 
                                     "catalogname":  itemv['catalogname'], 
                                     "source_url": itemv['source_url'], 
                                     "authkey": itemv['authkey'], 
@@ -190,16 +191,19 @@ class ServiceCatalogMS:
                                     "jsonraw": itemv['jsonraw'],
                                     "services": itemv['services']
                                     }
-                    #Get the relationship with the version and set the current version
-                    Catalogentry['version_id'] = itemv['_id']
-                    collection = self.database["ServiceCatalog"]
-                    record = collection.insert_one(Catalogentry)
-                    #Delete the previous version
-                    self.DeleteVersion(source_url,document['version'])
+                        #Get the relationship with the version and set the current version
+                        Catalogentry['version_id'] = itemv['_id']
+                        collection = self.database["ServiceCatalog"]
+                        record = collection.insert_one(Catalogentry)
+                        #Delete the previous version
+                        self.DeleteVersion(source_url,document['version'])
+                        return 'Succesfully retrieved version'
+                    except Exception as e:
+                        raise ValueError(f"Version '{version}' not found in catalog '{source_url}'")
                 except IndexError as e:
                     print(f"The version {version} does not exists for the catalog {document['catalogname']}")
             except ValueError as e:
-                raise ValueError(f"Source '{source_url}' not found in catalog") 
+                raise ValueError(f"The version {version} does not exists for the catalog {document['catalogname']}") 
         else:
             raise ValueError(f"Catalog '{itemv['catalogname']}' does not exists in the database")
         
