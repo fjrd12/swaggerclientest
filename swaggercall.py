@@ -1,4 +1,4 @@
-from ServiceCatalogMS import ServiceCatalogMS
+from src.ServiceCatalog import ServiceCatalogMS
 # Create a new ServiceCatalog instance
 catalog = ServiceCatalogMS()
 #try:

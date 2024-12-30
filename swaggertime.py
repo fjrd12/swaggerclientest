@@ -1,4 +1,4 @@
-from ServiceCatalog import ServiceCatalog
+from ServiceCatalog_ import ServiceCatalog
 
 try:
     CatalogoServicios = ServiceCatalog('source2')

@@ -1,7 +1,8 @@
 import unittest
-from ServiceCatalogMS import ServiceCatalogMS
+from ServiceCatalogMS_ import ServiceCatalogMS
 import urllib3
 # Disable InsecureRequestWarning
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 

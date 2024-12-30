@@ -1,15 +1,13 @@
-import json
+from pymongo.mongo_client import MongoClient
+from pymongo import errors
+from pymongo.server_api import ServerApi
 from pyswaggerapiwrap.http_client import HttpClient
-from pyswaggerapiwrap import api_filter
 from pyswaggerapiwrap.utils import find_swagger_json
-from pyswaggerapiwrap.api_filter import APIDataFrameFilter
 import re
 import requests
 import urllib3
 import yaml
-from pymongo.mongo_client import MongoClient
-from pymongo import errors
-from pymongo.server_api import ServerApi
+
 
 # Disable InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

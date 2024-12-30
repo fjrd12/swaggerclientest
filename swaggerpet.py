@@ -1,4 +1,4 @@
-from ServiceCatalog import ServiceCatalog
+from ServiceCatalog_ import ServiceCatalog
 
 #Get the catalog of services from a source
 try:
