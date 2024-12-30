@@ -33,15 +33,15 @@ class ServiceCatalogMS:
                     tls = mongodb_config['tls']
                     tls_allow_invalid_certificates = mongodb_config['tls_allow_invalid_certificates']
                     # Connect to the MongoDB service
-                    client = MongoClient(uri, server_api=ServerApi(server_api_version), tls=tls, tlsAllowInvalidCertificates=tls_allow_invalid_certificates)
+                    self.client = MongoClient(uri, server_api=ServerApi(server_api_version), tls=tls, tlsAllowInvalidCertificates=tls_allow_invalid_certificates)
                     # Validate the connection
                     try:
-                        client.admin.command('ping')
+                        self.client.admin.command('ping')
                         print(f"Succesfully connected to presistent storage {mongodb_config['dbname']}")
-                        if mongodb_config['dbname'] in client.list_database_names():
-                            self.database = client[mongodb_config['dbname']]
+                        if mongodb_config['dbname'] in self.client.list_database_names():
+                            self.database = self.client[mongodb_config['dbname']]
                         else:
-                            self.InitDb(client, mongodb_config['dbname'])
+                            self.InitDb(self.client, mongodb_config['dbname'])
                     except errors.PyMongoError as e:
                         print(f"An error occurred: {e}")
             except Exception as e:
@@ -83,7 +83,7 @@ class ServiceCatalogMS:
 
     def CreateCatalog(self, source_url,Catalogname,authkey=None):
         """
-        Import the catalog from a source.
+        Import the catalog from a source and create a version for it
         :param source_url: The source to import the catalog from.
         """
         #Validate if there is any service associated with the source url 
@@ -107,7 +107,7 @@ class ServiceCatalogMS:
                                 }
                 record = collectionv.insert_one(Catalogentry)
                 record_id = record.inserted_id
-                #Get the relatinship with the version and set the current version
+                #Get the relationship with the version and set the current version
                 Catalogentry['version_id'] = record_id
                 record = collection.insert_one(Catalogentry)
             except ValueError as e:
@@ -117,7 +117,7 @@ class ServiceCatalogMS:
 
     def DeleteCatalog(self, source_url,Catalogname,authkey=None):
         """
-        Import the catalog from a source.
+        delete the catalog from a source name or url.
         :param source_url: The source to import the catalog from.
         """
         #Get the catalog
@@ -136,7 +136,7 @@ class ServiceCatalogMS:
     
     def DeleteVersion(self, source_url, Version):
         """
-        Import the catalog from a source.
+        Delete a version from a source version.
         :param source_url: The source to import the catalog from.
         """
         #Get the catalog
@@ -163,8 +163,8 @@ class ServiceCatalogMS:
 
     def RetrieveVersion(self,source_url,version):
         """
-        Import the catalog from a source.
-        :param source_url: The source to import the catalog from.
+        Get a version of the service catalog
+        :param source_url: The source to i-mport the catalog from.
         """
         #Validate if there is any service associated with the source url 
         collectionv = self.database["ServiceCatalogVersion"]
@@ -205,9 +205,9 @@ class ServiceCatalogMS:
         else:
             raise ValueError(f"Catalog '{itemv['catalogname']}' does not exists in the database")
         
-    def RefreshCatalog(self, source_url,Catalogname,authkey=None):
+    def RefreshCatalog(self, source_url=None,Catalogname=None,authkey=None):
         """
-        Import the catalog from a source.
+        Refresh the catalog from a source.
         :param source_url: The source to import the catalog from.
         """
         #Validate if there is any service associated with the source url 
@@ -244,7 +244,13 @@ class ServiceCatalogMS:
                 raise ValueError(f"Source '{source_url}' not found in catalog") 
         else:
             raise ValueError(f"Catalog '{Catalogname}' does not exists in the database")
-        
+
+    def CloseConnection(self):
+        """
+        Close the connection to the database.
+        """
+        self.client.close()
+
     def GetServiceMetadata(self, servicename):
         """
         Get the metadata for a specific service.

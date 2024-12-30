@@ -13,6 +13,8 @@ catalog = ServiceCatalogMS()
 #catalog.RetrieveVersion('https://petstore.swagger.io/v2',11)
 # deleted = catalog.DeleteCatalog('https://petstore.swagger.io/v2','Petstore','token')
 # print(deleted)
-#catalog = catalog.GetCatalog()
-#for item in catalog:
-#    print(item)
+catalogcontent = catalog.GetCatalog()
+for item in catalogcontent:
+   print(item)
+catalog.CloseConnection()
+
