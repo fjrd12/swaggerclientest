@@ -1,5 +1,5 @@
 import unittest
-from ServiceCatalogMS_ import ServiceCatalogMS
+from src.ServiceCatalog import ServiceCatalogMS
 import urllib3
 # Disable InsecureRequestWarning
 
