@@ -21,7 +21,7 @@ except ValueError as e:
 
 try:
     body = {
-            "name": "New Categoria",
+            "name": "New Categoria 3",
         }
     response = CatalogoServicios.ExecuteService('createcategory', [], body)
     print(response.content)

@@ -8,10 +8,9 @@ import requests
 import urllib3
 import yaml
 
-
 # Disable InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
+    
 class ServiceCatalogMS:
     def __init__(self):
         """
@@ -101,7 +100,7 @@ class ServiceCatalogMS:
                                  "authkey": authkey, 
                                  "version": 1,
                                  "jsonraw": find_swagger_json(source_url),
-                                 "services": routes_dict.to_json()
+                                 "services": routes_dict.to_records().tolist()
                                 }
                 record = collectionv.insert_one(Catalogentry)
                 record_id = record.inserted_id
@@ -155,10 +154,27 @@ class ServiceCatalogMS:
         """
         #Get the catalog
         collection = self.database["ServiceCatalog"]
+        documents_raw = []
         documents = None
         documents = collection.find({})
-        return documents
+        for item in documents:
+            item['_id'] = str(item['_id'])
+            item['version_id'] = str(item['version_id'])
+            documents_raw.append(item)
+        return documents_raw
 
+    def GetCatalogServices(self, source_url):
+        """
+        Get catalog services
+        """
+        #Get the catalog
+        collection = self.database["ServiceCatalog"]
+        documents_raw = []
+        document = None
+        document = collection.find_one({ "source_url":  source_url}, { "services": 1 })
+        document['_id'] = str(document['_id'])
+        return document
+    
     def RetrieveVersion(self,source_url,version):
         """
         Get a version of the service catalog
@@ -284,6 +300,14 @@ class ServiceCatalogMS:
         return TVars
 
     def ExecuteService(self, servicename, context=[], body={}) -> any: 
+        """
+        Execute the method related of servicename.
+        :servicename: The name of the service to retrieve variables for.
+        :context: The context to map the variables to.
+        :body: The body to send in the request.
+        :return: A list of variables for the service.
+        :raises ValueError: If the service is not found in the catalog.
+        """
         params= []
         service = next((item for item in self.source['services'] if item['name'] == servicename), None)
         if service: 
@@ -348,7 +372,6 @@ class ServiceCatalogMS:
     def MapVars(self, vars, context):
         """
         Map the variables to the context values.
-
         :param vars: The list of variables to map.
         :param context: The context to map the variables to.
         :return: The list of mapped variables.

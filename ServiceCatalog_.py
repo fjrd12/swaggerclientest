@@ -27,6 +27,7 @@ class ServiceCatalog:
             self.routes_dict = self.http_client.get_routes_df(swagger_route="/swagger.json")
             self.jsonraw = find_swagger_json(self.source['url'])
             self.jsonapi = self.routes_dict.to_json()
+            self.records = self.routes_dict.to_records().tolist()
             self.services = self.source['services']
             self.api_filter = APIDataFrameFilter(self.routes_dict)    
             self.api_url = self.source['url']
