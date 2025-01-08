@@ -3,6 +3,7 @@ from pymongo import errors
 from pymongo.server_api import ServerApi
 from pyswaggerapiwrap.http_client import HttpClient
 from pyswaggerapiwrap.utils import find_swagger_json
+from pyswaggerapiwrap.api_filter import APIDataFrameFilter
 import re
 import requests
 import urllib3
@@ -171,7 +172,7 @@ class ServiceCatalogMS:
         collection = self.database["ServiceCatalog"]
         documents_raw = []
         document = None
-        document = collection.find_one({ "source_url":  source_url}, { "services": 1 })
+        document = collection.find_one({ "source_url":  source_url}, { "services": 1 , "authkey": 1, "version": 1})
         document['_id'] = str(document['_id'])
         return document
     
@@ -352,6 +353,65 @@ class ServiceCatalogMS:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         return response
     
+    def ExecuteServiceMS(self, serviceurl, path, context=[], body={}) -> any: 
+        """
+        Execute the method related of servicename.
+        :servicename: The name of the service to retrieve variables for.
+        :context: The context to map the variables to.
+        :body: The body to send in the request.
+        :return: A list of variables for the service.
+        :raises ValueError: If the service is not found in the catalog.
+        """
+        params= []
+        GetCatalogService = self.GetCatalogServices(serviceurl)
+
+        if 'services' in GetCatalogService:
+            service = next((item for item in GetCatalogService['services'] if item[2] == path), None)
+            if service: 
+            # Get the service method metadata
+                try:
+                    variables = service[4]       
+                    try:
+                        params = self.MapVars(variables, context)
+                    except ValueError as e: 
+                       raise ValueError(f"Service '{path}' not found in catalog")
+                    # Prepare the name for the method and route
+                    method = service[3].lower()
+                    route = path
+                    if method != 'get':
+                        route = self.__ReplaceVarsInRoute(route, variables, params)
+                        headers = {'api_key': self.api_key}
+                        if len(body) > 0:
+                            headers['Content-Type'] = 'application/json'
+                            response = self.__MakeRequest(method, f"{self.api_url}{route}", headers, json=body)
+                    else:
+                        vars = re.findall(r'\{.*?\}', route)
+                        for item in vars:
+                            route = route.replace(item,'with_'+ item.replace("{","").replace("}",""))
+                        basepath = '/' + service[1] + '/'
+                        route = route.replace(basepath,"",1)
+                        if route.endswith('/'):
+                            route = route[:-1] + "_"
+                        dmethod = method + '_' + route
+                        http_client = HttpClient(base_url=serviceurl, auth_token=GetCatalogService['authkey'])
+                        routes_dict = http_client.get_routes_df(swagger_route="/swagger.json")
+                        api_filter = APIDataFrameFilter(routes_dict) 
+                        getobjentity = getattr(api_filter, service[1])
+                        # Transform the array into a dynamic dictionary
+                        dynamic_params = {item['name']: item['value'] for item in params}
+                        try:
+                            response = getattr(getobjentity, dmethod).run(http_client=http_client, **dynamic_params)
+                        except requests.exceptions.HTTPError as e:
+                            error_message = e.response.text if e.response else str(e)
+                            print(error_message)
+                            raise ValueError(f"HTTP error occurred while calling service '{path}': {error_message}")            
+                except ValueError as e:
+                    raise ValueError(f"Service '{path}' not found in catalog")
+            else:
+                raise ValueError(f"Service '{path}' not found in catalog")
+        return response
+    
+    
     def GetRoutes(self):
         """
         Get the routes dictionary.
@@ -378,7 +438,16 @@ class ServiceCatalogMS:
         :raises ValueError: If a required variable is not mapped in the context.
         """
         for itemv in vars:
-            contextmap = next((item for item in context if item['name'] == itemv['name']), None)
+            for item in context:
+                if itemv['name'] == item['name']:
+                    match itemv['param_type']:
+                        case 'integer':
+                            itemv['value'] = int(item['value'])
+                        case 'string':    
+                            itemv['value'] = str(item['value'])
+                        case _:
+                            itemv['value'] = item['value']
+            contextmap = itemv
             if contextmap:
                 itemv['value'] = contextmap['value']
             elif itemv['required']:

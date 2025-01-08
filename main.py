@@ -1,7 +1,15 @@
-from fastapi import FastAPI, HTTPException,Query
+from fastapi import FastAPI, HTTPException,Query, Request
 from pydantic import BaseModel
 from src.ServiceCatalog import ServiceCatalogMS
 from contextlib import asynccontextmanager
+import uvicorn
+import json
+from typing import List, Dict
+
+class ExecuteMethodRequest(BaseModel):
+    source_url: str
+    path: str
+    context: any
 
 app = FastAPI()
 
@@ -67,8 +75,22 @@ async def get_methods(source_url: str):
     try:
         service_catalog_ms = ServiceCatalogMS()
         Response = {}
-        Response = service_catalog_ms.GetCatalogServices(source_url).to_List()
+        Response = service_catalog_ms.GetCatalogServices(source_url)
         service_catalog_ms.CloseConnection()
         return Response
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/ExecuteMethod")
+def execute_method(source_url: str, path: str, context: str):
+    service_catalog_ms = ServiceCatalogMS()
+    try:
+        context_parsed = json.loads(context)
+        response = service_catalog_ms.ExecuteServiceMS(source_url, path, context_parsed) 
+        service_catalog_ms.CloseConnection()
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
