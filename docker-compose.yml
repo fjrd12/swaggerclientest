@@ -4,7 +4,7 @@ services:
   web:
     build: .
     ports:
-      - "8000:8000"
+      - "8450:8450"
     environment:
       - MONGO_URI=mongodb://mongo:27017
     depends_on:
