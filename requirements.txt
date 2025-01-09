@@ -1,0 +1,7 @@
+fastapifastapi
+uvicorn
+pydantic
+pymongo
+requests
+PyYAML
+pyswaggerapiwrap
