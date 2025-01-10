@@ -20,7 +20,7 @@ class ServiceCatalogMS:
         """
         # Try to load the configuration from the config.yaml file
         try:
-            with open("config.yaml", "r") as file:
+            with open("/confg/config.yaml", "r") as file:
                 config = yaml.safe_load(file)
             try:
                 # Validate the configuration
