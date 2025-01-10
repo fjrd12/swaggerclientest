@@ -1,7 +1,7 @@
-fastapi
-uvicorn
-pydantic
-pymongo
-requests
-PyYAML
-pyswaggerapiwrap
+fastapi==0.115.6
+pymongo==4.10.1
+pyswaggerapiwrap==0.1.9
+PyYAML==6.0.2
+Requests==2.32.3
+urllib3==2.3.0
+uvicorn==0.34.0

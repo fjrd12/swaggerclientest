@@ -1,5 +1,5 @@
 mongodb:
-  uri: "127.0.0.1:27017"
+  uri: "mongo:27017"
   server_api_version: "1"
   password: ""
   username: ""
