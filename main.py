@@ -6,11 +6,6 @@ import uvicorn
 import json
 from typing import List, Dict
 
-class ExecuteMethodRequest(BaseModel):
-    source_url: str
-    path: str
-    context: any
-
 app = FastAPI()
 
 @app.post("/CreateCatalog")
