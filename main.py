@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from src.ServiceCatalog import ServiceCatalogMS
-from contextlib import asynccontextmanager
 import uvicorn
 import json
 import yaml

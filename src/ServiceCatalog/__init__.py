@@ -20,18 +20,19 @@ class ServiceCatalogMS:
         """
         # Try to load the configuration from the config.yaml file
         try:
-            with open("/confg/config.yaml", "r") as file:
+            with open("./config/config.yaml", "r") as file:
                 config = yaml.safe_load(file)
             try:
                 # Validate the configuration
                 if self.ValidConfig(config):
                     mongodb_config = config['mongodb']
-                    uri = "mongodb+srv://" + mongodb_config['username'] + ":" + mongodb_config['password']+ "@" +mongodb_config['uri']
-                    server_api_version = mongodb_config['server_api_version']
-                    tls = mongodb_config['tls']
-                    tls_allow_invalid_certificates = mongodb_config['tls_allow_invalid_certificates']
+                    #uri = "mongodb+srv://" + mongodb_config['username'] + ":" + mongodb_config['password']+ "@" +mongodb_config['uri']
+                    #server_api_version = mongodb_config['server_api_version']
+                    #tls = mongodb_config['tls']
+                    #tls_allow_invalid_certificates = mongodb_config['tls_allow_invalid_certificates']
                     # Connect to the MongoDB service
-                    self.client = MongoClient(uri, server_api=ServerApi(server_api_version), tls=tls, tlsAllowInvalidCertificates=tls_allow_invalid_certificates)
+                    #self.client = MongoClient(uri, server_api=ServerApi(server_api_version), tls=tls, tlsAllowInvalidCertificates=tls_allow_invalid_certificates)
+                    self.client = MongoClient(mongodb_config['uri'])
                     # Validate the connection
                     try:
                         self.client.admin.command('ping')
@@ -75,7 +76,7 @@ class ServiceCatalogMS:
             db = client[dbname]
             db.create_collection('ServiceCatalog')
             db.create_collection('ServiceCatalogVersion')
-            self.persistentApi = db
+            self.database = db
         except Exception as e:
             print(f"Unexpected error: {e}")
 
