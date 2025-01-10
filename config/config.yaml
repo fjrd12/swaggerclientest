@@ -6,3 +6,4 @@ mongodb:
   dbname: "ServiceCatalog"
   tls: true
   tls_allow_invalid_certificates: true
+port: 8450

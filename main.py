@@ -1,10 +1,9 @@
-from fastapi import FastAPI, HTTPException,Query, Request
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
 from src.ServiceCatalog import ServiceCatalogMS
 from contextlib import asynccontextmanager
 import uvicorn
 import json
-from typing import List, Dict
+import yaml
 
 app = FastAPI()
 
@@ -88,4 +87,13 @@ def execute_method(source_url: str, path: str, context: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8450)
+    with open("./config/config.yaml", "r") as file:
+        config = yaml.safe_load(file)
+        try:
+            # Validate the configuration
+            if config['port'] is not None:                    
+                port = config['port']
+                uvicorn.run(app, host="0.0.0.0", port=port)
+        except Exception as e:
+            print("Error in reading the config file")
+    
