@@ -1,8 +1,8 @@
 mongodb:
-  uri: "mongo:27017"
+  uri: "localhost:27017"
   server_api_version: "1"
-  password: "root"
-  username: "rjon2457"
+  password: ""
+  username: ""
   dbname: "ServiceCatalog"
   tls: true
   tls_allow_invalid_certificates: true

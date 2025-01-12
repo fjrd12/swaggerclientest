@@ -3,11 +3,18 @@ from src.ServiceCatalog import ServiceCatalogMS
 import uvicorn
 import json
 import yaml
+from typing import Any, List,Optional
+from pydantic import BaseModel,Json
+class Service(BaseModel):
+    source_url: str
+    path: str
+    context: Optional[List[Any]] = None
+    #json_obj: Json[Any]
 
 app = FastAPI()
 
 @app.post("/CreateCatalog")
-async def CreateCatalog(source_url: str, Catalogname: str, authkey: str | None ):
+def CreateCatalog(source_url: str, Catalogname: str, authkey: str | None ):
     service_catalog_ms = ServiceCatalogMS()
     try:
         service_catalog_ms.CreateCatalog(source_url, Catalogname, authkey)
@@ -85,6 +92,17 @@ def execute_method(source_url: str, path: str, context: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/ExecuteMethod1")
+def execute_method(service: Service):
+        service_catalog_ms = ServiceCatalogMS()
+        try:
+            #context_parsed = json.loads(context)
+            response = service_catalog_ms.ExecuteServiceMS(service.source_url, service.path, service.context) 
+            service_catalog_ms.CloseConnection()
+            return response
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    
 if __name__ == "__main__":
     with open("./config/config.yaml", "r") as file:
         config = yaml.safe_load(file)

@@ -26,7 +26,10 @@ class ServiceCatalogMS:
                 # Validate the configuration
                 if self.ValidConfig(config):
                     mongodb_config = config['mongodb']
-                    #uri = "mongodb+srv://" + mongodb_config['username'] + ":" + mongodb_config['password']+ "@" +mongodb_config['uri']
+                    if mongodb_config['username'] or mongodb_config['password']:
+                        uri = "mongodb+srv://" + mongodb_config['username'] + ":" + mongodb_config['password']+ "@" +mongodb_config['uri']
+                    else:
+                        uri = "mongodb+srv://" + mongodb_config['uri']
                     #server_api_version = mongodb_config['server_api_version']
                     #tls = mongodb_config['tls']
                     #tls_allow_invalid_certificates = mongodb_config['tls_allow_invalid_certificates']
@@ -404,7 +407,6 @@ class ServiceCatalogMS:
                             response = getattr(getobjentity, dmethod).run(http_client=http_client, **dynamic_params)
                         except requests.exceptions.HTTPError as e:
                             error_message = e.response.text if e.response else str(e)
-                            print(error_message)
                             raise ValueError(f"HTTP error occurred while calling service '{path}': {error_message}")            
                 except ValueError as e:
                     raise ValueError(f"Service '{path}' not found in catalog")
