@@ -357,7 +357,7 @@ class ServiceCatalogMS:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         return response
     
-    def ExecuteServiceMS(self, serviceurl, path, context=[], body={}) -> any: 
+    def ExecuteServiceMS(self, serviceurl, path, method,context=[], body={}) -> any: 
         """
         Execute the method related of servicename.
         :servicename: The name of the service to retrieve variables for.
@@ -367,49 +367,47 @@ class ServiceCatalogMS:
         :raises ValueError: If the service is not found in the catalog.
         """
         params= []
+        body = body or ""
         GetCatalogService = self.GetCatalogServices(serviceurl)
 
         if 'services' in GetCatalogService:
-            service = next((item for item in GetCatalogService['services'] if item[2] == path), None)
+            service = next((item for item in GetCatalogService['services'] if item[2] == path and item[3] == method ), None)
             if service: 
             # Get the service method metadata
+                variables = service[4]       
                 try:
-                    variables = service[4]       
-                    try:
-                        params = self.MapVars(variables, context)
-                    except ValueError as e: 
-                       raise ValueError(f"Service '{path}' not found in catalog")
-                    # Prepare the name for the method and route
-                    method = service[3].lower()
-                    route = path
-                    if method != 'get':
-                        route = self.__ReplaceVarsInRoute(route, variables, params)
-                        headers = {'api_key': self.api_key}
-                        if len(body) > 0:
-                            headers['Content-Type'] = 'application/json'
-                            response = self.__MakeRequest(method, f"{self.api_url}{route}", headers, json=body)
-                    else:
-                        vars = re.findall(r'\{.*?\}', route)
-                        for item in vars:
-                            route = route.replace(item,'with_'+ item.replace("{","").replace("}",""))
-                        basepath = '/' + service[1] + '/'
-                        route = route.replace(basepath,"",1)
-                        if route.endswith('/'):
-                            route = route[:-1] + "_"
-                        dmethod = method + '_' + route
-                        http_client = HttpClient(base_url=serviceurl, auth_token=GetCatalogService['authkey'])
-                        routes_dict = http_client.get_routes_df(swagger_route="/swagger.json")
-                        api_filter = APIDataFrameFilter(routes_dict) 
-                        getobjentity = getattr(api_filter, service[1])
-                        # Transform the array into a dynamic dictionary
-                        dynamic_params = {item['name']: item['value'] for item in params}
-                        try:
-                            response = getattr(getobjentity, dmethod).run(http_client=http_client, **dynamic_params)
-                        except requests.exceptions.HTTPError as e:
-                            error_message = e.response.text if e.response else str(e)
-                            raise ValueError(f"HTTP error occurred while calling service '{path}': {error_message}")            
-                except ValueError as e:
+                    params = self.MapVars(variables, context, GetCatalogService['authkey'])
+                except ValueError as e: 
                     raise ValueError(f"Service '{path}' not found in catalog")
+                # Prepare the name for the method and route
+                method = service[3].lower()
+                route = path
+                if method != 'get':
+                    route = self.__ReplaceVarsInRoute(route, variables, params)
+                    headers = {'api_key': GetCatalogService['authkey']}
+                    if len(body) > 0:
+                        headers['Content-Type'] = 'application/json'
+                    response = self.__MakeRequest(method, f"{serviceurl}{route}", headers, json=body)
+                else:
+                    vars = re.findall(r'\{.*?\}', route)
+                    for item in vars:
+                        route = route.replace(item,'with_'+ item.replace("{","").replace("}",""))
+                    basepath = '/' + service[1] + '/'
+                    route = route.replace(basepath,"",1)
+                    if route.endswith('/'):
+                        route = route[:-1] + "_"
+                    dmethod = method + '_' + route
+                    http_client = HttpClient(base_url=serviceurl, auth_token=GetCatalogService['authkey'])
+                    routes_dict = http_client.get_routes_df(swagger_route="/swagger.json")
+                    api_filter = APIDataFrameFilter(routes_dict) 
+                    getobjentity = getattr(api_filter, service[1])
+                    # Transform the array into a dynamic dictionary
+                    dynamic_params = {item['name']: item['value'] for item in params}
+                    try:
+                        response = getattr(getobjentity, dmethod).run(http_client=http_client, **dynamic_params)
+                    except requests.exceptions.HTTPError as e:
+                        error_message = e.response.text if e.response else str(e)
+                        raise ValueError(f"HTTP error occurred while calling service '{path}': {error_message}")            
             else:
                 raise ValueError(f"Service '{path}' not found in catalog")
         return response
@@ -432,7 +430,7 @@ class ServiceCatalogMS:
             item["value"] = item['defaultvalue'] or None
         return vars
 
-    def MapVars(self, vars, context):
+    def MapVars(self, vars, context,aut_key):
         """
         Map the variables to the context values.
         :param vars: The list of variables to map.
@@ -441,20 +439,30 @@ class ServiceCatalogMS:
         :raises ValueError: If a required variable is not mapped in the context.
         """
         for itemv in vars:
-            for item in context:
-                if itemv['name'] == item['name']:
-                    match itemv['param_type']:
-                        case 'integer':
-                            itemv['value'] = int(item['value'])
-                        case 'string':    
-                            itemv['value'] = str(item['value'])
-                        case _:
-                            itemv['value'] = item['value']
-            contextmap = itemv
-            if contextmap:
-                itemv['value'] = contextmap['value']
-            elif itemv['required']:
-                raise ValueError(f"Variable '{itemv['name']}' is not provided in the context and for method is obligatory")
+            if itemv['in'] == 'path':
+                for item in context:
+                    if itemv['name'] == item['name']:
+                        match itemv['param_type']:
+                            case 'integer':
+                                itemv['value'] = int(item['value'])
+                            case 'string':    
+                                itemv['value'] = str(item['value'])
+                            case _:
+                                itemv['value'] = item['value']
+                contextmap = itemv
+                if contextmap:
+                    itemv['value'] = contextmap['value']
+                elif itemv['required']:
+                    raise ValueError(f"Variable '{itemv['name']}' is not provided in the context and for method is obligatory")
+            
+            if itemv['in'] == 'header':
+                if itemv['name'] == 'api_key':
+                    itemv['value'] = aut_key
+                contextmap = itemv
+                if contextmap:
+                    itemv['value'] = contextmap['value']
+                elif itemv['required']:
+                    raise ValueError(f"Variable '{itemv['name']}' is not provided in the context and for method is obligatory")    
         return vars
     
     def __MakeRequest(self, method, url, headers=None, params=None, data=None, json=None):
@@ -462,7 +470,7 @@ class ServiceCatalogMS:
         try: 
             response = requests.request(method, url, headers=headers, params=params, data=data, json=json)
             response.raise_for_status() 
-            return response 
+            return response.text 
         except requests.exceptions.HTTPError as http_err:
             print(f"HTTP error occurred: {http_err}") 
         except Exception as err:

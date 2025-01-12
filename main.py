@@ -8,6 +8,7 @@ from pydantic import BaseModel,Json
 class Service(BaseModel):
     source_url: str
     path: str
+    method: str
     context: Optional[List[Any]] = None
     #json_obj: Json[Any]
 
@@ -80,8 +81,8 @@ async def get_methods(source_url: str):
         return Response
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/ExecuteMethod")
+"""
+@a"pp.post("/ExecuteMethod")
 def execute_method(source_url: str, path: str, context: str):
     service_catalog_ms = ServiceCatalogMS()
     try:
@@ -91,13 +92,13 @@ def execute_method(source_url: str, path: str, context: str):
         return response
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/ExecuteMethod1")
+"""
+@app.post("/ExecuteMethod")
 def execute_method(service: Service):
         service_catalog_ms = ServiceCatalogMS()
         try:
             #context_parsed = json.loads(context)
-            response = service_catalog_ms.ExecuteServiceMS(service.source_url, service.path, service.context) 
+            response = service_catalog_ms.ExecuteServiceMS(service.source_url, service.path,service.method, service.context) 
             service_catalog_ms.CloseConnection()
             return response
         except Exception as e:
