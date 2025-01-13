@@ -86,29 +86,25 @@ async def get_methods(source_url: str):
         return Response
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-"""
-@a"pp.post("/ExecuteMethod")
-def execute_method(source_url: str, path: str, context: str):
-    service_catalog_ms = ServiceCatalogMS()
-    try:
-        context_parsed = json.loads(context)
-        response = service_catalog_ms.ExecuteServiceMS(source_url, path, context_parsed) 
-        service_catalog_ms.CloseConnection()
-        return response
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-"""
+
 @app.post("/ExecuteMethod")
 def execute_method(service: Service, response_model=Reply):
-        service_catalog_ms = ServiceCatalogMS()
-        try:
-            response = service_catalog_ms.ExecuteServiceMS(service.source_url, service.path,service.method, service.context) 
-            service_catalog_ms.CloseConnection()
-            response_model = Reply(reply=response, status_code=200, errormessage='')
-            return response_model
-        except Exception as e:
-            response_model = Reply(reply='', status_code=500, errormessage=str(e))
-            raise HTTPException(status_code=500, detail=response_model.model_dump_json())
+    """
+    Ejecuta un método del servicio catalogado.
+
+    :param service: Objeto que contiene los detalles del servicio a ejecutar.
+    :param response_model: Modelo de respuesta que se devolverá.
+    :return: Respuesta del servicio ejecutado.
+    """
+    service_catalog_ms = ServiceCatalogMS()
+    try:
+        response = service_catalog_ms.ExecuteServiceMS(service.source_url, service.path,service.method, service.context) 
+        service_catalog_ms.CloseConnection()
+        response_model = Reply(reply=response, status_code=200, errormessage='')
+        return response_model
+    except Exception as e:
+        response_model = Reply(reply='', status_code=500, errormessage=str(e))
+        raise HTTPException(status_code=500, detail=response_model.model_dump_json())
     
 if __name__ == "__main__":
     with open("./config/config.yaml", "r") as file:
