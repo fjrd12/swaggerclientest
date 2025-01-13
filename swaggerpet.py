@@ -34,11 +34,11 @@ try:
 except ValueError as e:
     print(e)
 
-try:
-    response = CatalogoServicios.ExecuteService('deletePetById', [{ "name": "petId", "value": '1' }])
-    print(response)
-except ValueError as e:
-    print(e)
+#try:
+#    response = CatalogoServicios.ExecuteService('deletePetById', [{ "name": "petId", "value": '1' }])
+#    print(response)
+#except ValueError as e:
+#    print(e)
 
 """
 try:

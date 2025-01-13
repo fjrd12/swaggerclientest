@@ -5,12 +5,17 @@ import json
 import yaml
 from typing import Any, List,Optional
 from pydantic import BaseModel,Json
+
 class Service(BaseModel):
     source_url: str
     path: str
     method: str
     context: Optional[List[Any]] = None
-    #json_obj: Json[Any]
+
+class Reply(BaseModel):
+    reply: Any
+    status_code: int
+    errormessage: str
 
 app = FastAPI()
 
@@ -94,15 +99,16 @@ def execute_method(source_url: str, path: str, context: str):
         raise HTTPException(status_code=500, detail=str(e))
 """
 @app.post("/ExecuteMethod")
-def execute_method(service: Service):
+def execute_method(service: Service, response_model=Reply):
         service_catalog_ms = ServiceCatalogMS()
         try:
-            #context_parsed = json.loads(context)
             response = service_catalog_ms.ExecuteServiceMS(service.source_url, service.path,service.method, service.context) 
             service_catalog_ms.CloseConnection()
-            return response
+            response_model = Reply(reply=response, status_code=200, errormessage='')
+            return response_model
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            response_model = Reply(reply='', status_code=500, errormessage=str(e))
+            raise HTTPException(status_code=500, detail=response_model.model_dump_json())
     
 if __name__ == "__main__":
     with open("./config/config.yaml", "r") as file:
