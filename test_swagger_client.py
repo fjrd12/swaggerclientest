@@ -46,7 +46,7 @@ class TestServiceCatalogMS(unittest.TestCase):
         e = None
         try:
            self.Catalog.RefreshCatalog('https://petstore.swagger.io/v2','Petstore','token')
-           print('Catalog version creation test pass')
+           print('Catalog refresh creation test pass')
         except Exception as e:
             self.Close = True
             print(f"Exception at Service Catalog refresh: {e}")

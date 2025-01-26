@@ -1,9 +1,0 @@
-mongodb:
-  uri: "localhost:27017"
-  server_api_version: "1"
-  password: ""
-  username: ""
-  dbname: "ServiceCatalog"
-  tls: true
-  tls_allow_invalid_certificates: true
-port: 8450

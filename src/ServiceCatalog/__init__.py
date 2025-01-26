@@ -22,32 +22,21 @@ class ServiceCatalogMS:
         try:
             with open("./config/config.yaml", "r") as file:
                 config = yaml.safe_load(file)
-            try:
-                # Validate the configuration
-                if self.ValidConfig(config):
-                    mongodb_config = config['mongodb']
-                    if mongodb_config['username'] or mongodb_config['password']:
-                        uri = "mongodb+srv://" + mongodb_config['username'] + ":" + mongodb_config['password']+ "@" +mongodb_config['uri']
+            # Validate the configuration
+            if self.ValidConfig(config):
+                mongodb_config = config['mongodb']                    
+                connectionstring = "mongodb://" + mongodb_config['uri'] + ":" + mongodb_config['port']
+                self.client = MongoClient(connectionstring)
+                # Validate the connection
+                try:
+                    self.client.admin.command('ping')
+                    print(f"Succesfully connected to presistent storage {mongodb_config['dbname']}")
+                    if mongodb_config['dbname'] in self.client.list_database_names():
+                        self.database = self.client[mongodb_config['dbname']]
                     else:
-                        uri = "mongodb+srv://" + mongodb_config['uri']
-                    #server_api_version = mongodb_config['server_api_version']
-                    #tls = mongodb_config['tls']
-                    #tls_allow_invalid_certificates = mongodb_config['tls_allow_invalid_certificates']
-                    # Connect to the MongoDB service
-                    #self.client = MongoClient(uri, server_api=ServerApi(server_api_version), tls=tls, tlsAllowInvalidCertificates=tls_allow_invalid_certificates)
-                    self.client = MongoClient(mongodb_config['uri'])
-                    # Validate the connection
-                    try:
-                        self.client.admin.command('ping')
-                        print(f"Succesfully connected to presistent storage {mongodb_config['dbname']}")
-                        if mongodb_config['dbname'] in self.client.list_database_names():
-                            self.database = self.client[mongodb_config['dbname']]
-                        else:
-                            self.InitDb(self.client, mongodb_config['dbname'])
-                    except errors.PyMongoError as e:
-                        print(f"An error occurred: {e}")
-            except Exception as e:
-                print(e)
+                        self.InitDb(self.client, mongodb_config['dbname'])
+                except errors.PyMongoError as e:
+                    print(f"An error occurred: {e}")
         except FileNotFoundError:
             print("The file config.yaml is not found.")
         except yaml.YAMLError as exc:
@@ -59,6 +48,7 @@ class ServiceCatalogMS:
         """
         Validate the configuration.
         :config: The configuration to validate.
+        :return: If the validation is correct
         """
         if 'mongodb' not in config:
             raise KeyError("The config mongodb is not in config.yaml.")
@@ -83,6 +73,125 @@ class ServiceCatalogMS:
         except Exception as e:
             print(f"Unexpected error: {e}")
 
+    def CompleteBodySchemaServices(self,Catalogentry):
+        """
+        Once you have a Catalogentry extend the body schema for all the services in the catalog entry
+        :param Catalogentry: 
+        """
+        definitions = []
+        items = []
+        paths = Catalogentry['jsonraw']['paths']
+
+        if 'definitions' in Catalogentry['jsonraw']:
+            definitions = Catalogentry['jsonraw']['definitions']
+
+        for item in Catalogentry['services']:
+            listvals = list(item)
+            ItemServiceSchema = None
+            itemdict = {
+                       'index':  listvals[0],
+                       'entity': listvals[1],
+                       'path':   listvals[2],
+                       'method': listvals[3],
+                       'parameters': listvals[4],
+                       'payload':    ServiceCatalogMS.CompleteBodySchema(item,Catalogentry,definitions, None, True),
+                       'summary': paths[item[2]][str(item[3]).lower()]['summary']
+                       }
+            items.append(itemdict)
+        
+        Catalogentry['services'] = items
+            
+        return Catalogentry
+
+
+    @staticmethod
+    def CompleteBodySchema(ServiceEntry,Catalogentry,definitions, schema,firstime):
+        """
+        Parse the body schema definition
+        :param ServiceEntry: Entry to be populated
+        :param paths associated with the service
+        """
+        BodySchema = []
+        required = []
+        paths = Catalogentry['jsonraw']['paths']
+        parameters = paths[ServiceEntry[2]][str(ServiceEntry[3]).lower()]['parameters']
+        servicepayload = next((item for item in parameters if item['in'] == 'body'), None)
+        if servicepayload:
+            if 'schema' in servicepayload:
+                if 'type' in servicepayload['schema']:
+                    if servicepayload['schema']['type'] == 'array':
+                        #Array in the root node definition
+                        BodySchema = ServiceCatalogMS.ParseArray(servicepayload['schema']['items'], definitions, required, False, True)    
+                else:                
+                    #Schema for the component
+                    BodySchema = ServiceCatalogMS.ParseSchema(BodySchema, servicepayload['schema']['$ref'],definitions, required, False)
+            else:
+                #Array of components
+                BodySchema = ServiceCatalogMS.ParseArray(servicepayload['schema']['items'], definitions, required, False, False)                    
+        return BodySchema
+
+    
+    @staticmethod
+    def ParseSchema(BodySchema, schemaname,definitions, required,firsttime):
+        fields = []
+        schema_parts = schemaname.split('/')
+        schema_components = definitions[schema_parts[2]]
+        if firsttime and 'required' in schema_components:
+            required = schema_components['required']
+        for item in schema_components['properties'].keys():
+            field = {}
+            field['name'] = item 
+            if '$ref' in schema_components['properties'][item]:
+                field['type'] = 'dict'
+                #If the schema has schemas inside
+                field['components'] = ServiceCatalogMS.ParseSchema(BodySchema,schema_components['properties'][item]['$ref'],definitions,required,False)
+            else:
+                #If is a single type is added
+                field['type'] = schema_components['properties'][item]['type']
+                field['required'] = item in required
+                #If the component has an array nested go for the array definition
+                if schema_components['properties'][item]['type'] == 'array':
+                    field['items'] = []
+                    #If it has an array process the content of the array
+                    field['items'] = ServiceCatalogMS.ParseArray(schema_components['properties'][item]['items'],definitions,required, firsttime, False)
+            fields.append(field)
+        return fields
+    
+    @staticmethod
+    def ParseArray(items, definitions, required, firstime, firstimearray):
+        fields = []
+        #If it is a simple schema it process it
+        if isinstance(items,dict) and not firstimearray:
+            field = {}
+            if '$ref' in items:
+                field['components'] = []
+                field['components'] = ServiceCatalogMS.ParseSchema(field['components'] , items['$ref'],definitions, required, True)
+            else:    
+                field['type'] = items['type']
+            fields.append(field)
+        else:
+            #If the array has different components its iterate for each component
+            for item in items:
+                field = {}
+                #If it is an array process as an
+                if not items['$ref']:
+                  field['type'] = item['type']
+                  field['required'] = item in required
+                  field['items'] = []
+                  field['items'] = ServiceCatalogMS.ParseArray(item['items'],definitions,required,False)
+                else:
+                    #If it is a schema process like that
+                    subfield = {}
+                    subfield['type'] = 'dict'
+                    subfield['components'] = []
+                    subfield['components'] = ServiceCatalogMS.ParseSchema(subfield['components'],items['$ref'] ,definitions, required, False)
+                    field['type'] = 'array'
+                    field['items'] = []
+                    field['items'].append(subfield)        
+                        
+                fields.append(field)
+        return fields
+    
     def CreateCatalog(self, source_url,Catalogname,authkey=None):
         """
         Import the catalog from a source and create a version for it
@@ -107,6 +216,7 @@ class ServiceCatalogMS:
                                  "jsonraw": find_swagger_json(source_url),
                                  "services": routes_dict.to_records().tolist()
                                 }
+                Catalogentry = self.CompleteBodySchemaServices(Catalogentry)
                 record = collectionv.insert_one(Catalogentry)
                 record_id = record.inserted_id
                 #Get the relationship with the version and set the current version
@@ -120,7 +230,8 @@ class ServiceCatalogMS:
     def DeleteCatalog(self, source_url,Catalogname,authkey=None):
         """
         delete the catalog from a source name or url.
-        :param source_url: The source to import the catalog from.
+        :param source_url: The source url to delete.
+        :param Catalogname: The source catalogname to delete.
         """
         #Get the catalog
         collection = self.database["ServiceCatalog"]
@@ -140,6 +251,7 @@ class ServiceCatalogMS:
         """
         Delete a version from a source version.
         :param source_url: The source to import the catalog from.
+        :param Version: Version deletion.
         """
         #Get the catalog
         collection = self.database["ServiceCatalog"]
@@ -201,28 +313,22 @@ class ServiceCatalogMS:
                     }
             documentsv  = collectionv.find( query)        
             try:
-                try:
-                    try:
-                        itemv = documentsv[0]
-                        Catalogentry = { 
-                                    "catalogname":  itemv['catalogname'], 
-                                    "source_url": itemv['source_url'], 
-                                    "authkey": itemv['authkey'], 
-                                    "version": itemv['version'],
-                                    "jsonraw": itemv['jsonraw'],
-                                    "services": itemv['services']
-                                    }
-                        #Get the relationship with the version and set the current version
-                        Catalogentry['version_id'] = itemv['_id']
-                        collection = self.database["ServiceCatalog"]
-                        record = collection.insert_one(Catalogentry)
-                        #Delete the previous version
-                        self.DeleteVersion(source_url,document['version'])
-                        return 'Succesfully retrieved version'
-                    except Exception as e:
-                        raise ValueError(f"Version '{version}' not found in catalog '{source_url}'")
-                except IndexError as e:
-                    print(f"The version {version} does not exists for the catalog {document['catalogname']}")
+                itemv = documentsv[0]
+                Catalogentry = { 
+                            "catalogname":  itemv['catalogname'], 
+                            "source_url": itemv['source_url'], 
+                            "authkey": itemv['authkey'], 
+                            "version": itemv['version'],
+                            "jsonraw": itemv['jsonraw'],
+                            "services": itemv['services']
+                            }
+                #Get the relationship with the version and set the current version
+                Catalogentry['version_id'] = itemv['_id']
+                collection = self.database["ServiceCatalog"]
+                record = collection.insert_one(Catalogentry)
+                #Delete the previous version
+                self.DeleteVersion(source_url,document['version'])
+                return 'Succesfully retrieved version'
             except ValueError as e:
                 raise ValueError(f"The version {version} does not exists for the catalog {document['catalogname']}") 
         else:
@@ -252,8 +358,9 @@ class ServiceCatalogMS:
                                  "authkey": documents['authkey'], 
                                  "version": itemv['version'] + 1,
                                  "jsonraw": find_swagger_json(source_url),
-                                 "services": routes_dict.to_json()
+                                 "services": routes_dict.to_records().tolist()
                                 }
+                Catalogentry = self.CompleteBodySchemaServices(Catalogentry)
                 record = collectionv.insert_one(Catalogentry)
                 record_id = record.inserted_id
                 #Get the relationship with the version and set the current version
@@ -303,111 +410,39 @@ class ServiceCatalogMS:
         else:
             raise ValueError(f"Service '{servicename}' not found in catalog")
         return TVars
-
-    def ExecuteService(self, servicename, context=[], body={}) -> any: 
-        """
-        Execute the method related of servicename.
-        :servicename: The name of the service to retrieve variables for.
-        :context: The context to map the variables to.
-        :body: The body to send in the request.
-        :return: A list of variables for the service.
-        :raises ValueError: If the service is not found in the catalog.
-        """
-        params= []
-        service = next((item for item in self.source['services'] if item['name'] == servicename), None)
-        if service: 
-            # Get the service method metadata
-            try:
-                service,variables = self.GetServiceMetadata(servicename)
-                variables = self.ClearVars(variables)
-                try:
-                    params = self.MapVars(variables, context)
-                except ValueError as e: 
-                    raise ValueError(f"Service '{servicename}' not found in catalog")
-                # Prepare the name for the method and route
-                method = service['method'].lower()
-                route = service['route']
-                if method != 'get':
-                    route = self.__ReplaceVarsInRoute(service['route'], service['variables'], params)
-                    headers = {'api_key': self.api_key}
-                    if len(body) > 0:
-                        headers['Content-Type'] = 'application/json'
-                    response = self.__MakeRequest(method, f"{self.api_url}{route}", headers, json=body)
-                else:
-                    vars = re.findall(r'\{.*?\}', service['route'])
-                    for item in vars:
-                        route = service['route'].replace(item,'with_'+ item.replace("{","").replace("}",""))
-                    basepath = '/' + service['entity'] + '/'
-                    route = route.replace(basepath,"",1)
-                    if route.endswith('/'):
-                        route = route[:-1] + "_"
-                    dmethod = method + '_' + route
-                    getobjentity = getattr(self.api_filter, service['entity'])
-                    # Transform the array into a dynamic dictionary
-                    dynamic_params = {item['name']: item['value'] for item in params}
-                    try:
-                        response = getattr(getobjentity, dmethod).run(http_client=self.http_client, **dynamic_params)
-                        
-                    except requests.exceptions.HTTPError as e:
-                        error_message = e.response.text if e.response else str(e)
-                        raise ValueError(f"HTTP error occurred while calling service '{servicename}': {error_message}")            
-            except ValueError as e:
-                raise ValueError(f"Service '{servicename}' not found in catalog")
-        else:
-            raise ValueError(f"Service '{servicename}' not found in catalog")
-        return response
     
-    def ExecuteServiceMS(self, serviceurl, path, method,context=[], body={}) -> any: 
+    def ExecuteServiceMS(self, serviceurl, path, method, context=any, payload=any) -> any: 
         """
         Execute the method related of servicename.
         :servicename: The name of the service to retrieve variables for.
         :context: The context to map the variables to.
-        :body: The body to send in the request.
+        :payload: The body to send in the request.
         :return: A list of variables for the service.
         :raises ValueError: If the service is not found in the catalog.
         """
         params= []
-        body = body or ""
         GetCatalogService = self.GetCatalogServices(serviceurl)
 
         if 'services' in GetCatalogService:
-            service = next((item for item in GetCatalogService['services'] if item[2] == path and item[3] == method ), None)
+            service = next((item for item in GetCatalogService['services'] if item['path'] == path and item['method'] == method), None)
             if service: 
             # Get the service method metadata
-                variables = service[4]       
+                variables = service['parameters']
                 try:
-                    params = self.MapVars(variables, context, GetCatalogService['authkey'])
+                    if len(variables) > 0:
+                        params = self.MapVars(variables, context)
                 except ValueError as e: 
-                    raise ValueError(f"Service '{path}' not found in catalog")
+                    raise ValueError(f"Exception at map parameters '{e}'")
                 # Prepare the name for the method and route
-                method = service[3].lower()
+                method = service['method'].lower()
                 route = path
-                if method != 'get':
-                    route = self.__ReplaceVarsInRoute(route, variables, params)
-                    headers = {'api_key': GetCatalogService['authkey']}
-                    if len(body) > 0:
-                        headers['Content-Type'] = 'application/json'
-                    response = self.__MakeRequest(method, f"{serviceurl}{route}", headers, json=body)
-                else:
-                    vars = re.findall(r'\{.*?\}', route)
-                    for item in vars:
-                        route = route.replace(item,'with_'+ item.replace("{","").replace("}",""))
-                    basepath = '/' + service[1] + '/'
-                    route = route.replace(basepath,"",1)
-                    if route.endswith('/'):
-                        route = route[:-1] + "_"
-                    dmethod = method + '_' + route
-                    http_client = HttpClient(base_url=serviceurl, auth_token=GetCatalogService['authkey'])
-                    routes_dict = http_client.get_routes_df(swagger_route="/swagger.json")
-                    api_filter = APIDataFrameFilter(routes_dict) 
-                    getobjentity = getattr(api_filter, service[1])
-                    # Transform the array into a dynamic dictionary
-                    dynamic_params = {item['name']: item['value'] for item in params}
-                    try:
-                        response = getattr(getobjentity, dmethod).run(http_client=http_client, **dynamic_params)
-                    except requests.exceptions.HTTPError as e:
-                        error_message = e.response.text if e.response else str(e)
-                        raise ValueError(f"HTTP error occurred while calling service '{path}': {error_message}")            
+                route = self.__ReplaceVarsInRoute(route, variables, params)
+                headers = {'api_key': GetCatalogService['authkey']}
+                headers['Content-Type'] = 'application/json'
+                try:
+                    response = self.__MakeRequest(method, f"{serviceurl}{route}", headers, json=payload)
+                except Exception as e:
+                    raise ValueError(e)     
             else:
                 raise ValueError(f"Service '{path}' not found in catalog")
         return response
@@ -430,7 +465,7 @@ class ServiceCatalogMS:
             item["value"] = item['defaultvalue'] or None
         return vars
 
-    def MapVars(self, vars, context,aut_key):
+    def MapVars(self, vars, context):
         """
         Map the variables to the context values.
         :param vars: The list of variables to map.
@@ -439,7 +474,7 @@ class ServiceCatalogMS:
         :raises ValueError: If a required variable is not mapped in the context.
         """
         for itemv in vars:
-            if itemv['in'] == 'path':
+            if itemv['in'] != 'body':
                 for item in context:
                     if itemv['name'] == item['name']:
                         match itemv['param_type']:
@@ -454,15 +489,6 @@ class ServiceCatalogMS:
                     itemv['value'] = contextmap['value']
                 elif itemv['required']:
                     raise ValueError(f"Variable '{itemv['name']}' is not provided in the context and for method is obligatory")
-            
-            if itemv['in'] == 'header':
-                if itemv['name'] == 'api_key':
-                    itemv['value'] = aut_key
-                contextmap = itemv
-                if contextmap:
-                    itemv['value'] = contextmap['value']
-                elif itemv['required']:
-                    raise ValueError(f"Variable '{itemv['name']}' is not provided in the context and for method is obligatory")    
         return vars
     
     def __MakeRequest(self, method, url, headers=None, params=None, data=None, json=None):
@@ -470,19 +496,30 @@ class ServiceCatalogMS:
         try: 
             response = requests.request(method, url, headers=headers, params=params, data=data, json=json)
             response.raise_for_status() 
-            return response.text 
+            return response 
         except requests.exceptions.HTTPError as http_err:
-            print(f"HTTP error occurred: {http_err}") 
+            raise ValueError(f"HTTP error occurred: {http_err}")
         except Exception as err:
-            print(f"Other error occurred: {err}")
+            raise ValueError(f"Other error occurred: {err}")
 
     def __ReplaceVarsInRoute(self, route, vars, params):
+        first = True
         for var in vars:
-            var_value = next((item['value'] for item in params if item['name'] == var['name']), None)
-            if var_value is None:
-                if not var['defaultvalue'] is None:
-                    var_value = var['defaultvalue']
+
+            if var['in'] != 'body':
+                var_value = next((item['value'] for item in params if item['name'] == var['name']), None)
+                if var_value is None:
+                    if not var['defaultvalue'] is None:
+                        var_value = var['defaultvalue']
+                    else:
+                        raise ValueError(f"Service requires variable '{var['name']}'")
+                if var['in'] == 'query':
+                    if first:
+                        route = route + '?' + var['name'] + '=' + str(var_value)
+                    else:
+                        route = route + '&' + var['name'] + '=' + str(var_value)
+                    first = False
                 else:
-                    raise ValueError(f"Service requires variable '{var['name']}'")
-            route = route.replace('{'+var['name']+'}', str(var_value), 1)
+                    route = route.replace('{'+var['name']+'}', str(var_value), 1)
+            
         return route

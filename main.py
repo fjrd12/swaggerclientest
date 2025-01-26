@@ -11,6 +11,7 @@ class Service(BaseModel):
     path: str
     method: str
     context: Optional[List[Any]] = None
+    payload: Any = None
 
 class Reply(BaseModel):
     reply: Any
@@ -98,9 +99,9 @@ def execute_method(service: Service, response_model=Reply):
     """
     service_catalog_ms = ServiceCatalogMS()
     try:
-        response = service_catalog_ms.ExecuteServiceMS(service.source_url, service.path,service.method, service.context) 
+        response = service_catalog_ms.ExecuteServiceMS(service.source_url, service.path,service.method, service.context,service.payload) 
         service_catalog_ms.CloseConnection()
-        response_model = Reply(reply=response, status_code=200, errormessage='')
+        response_model = Reply(reply=response.content, status_code=200, errormessage='')
         return response_model
     except Exception as e:
         response_model = Reply(reply='', status_code=500, errormessage=str(e))
@@ -116,4 +117,3 @@ if __name__ == "__main__":
                 uvicorn.run(app, host="0.0.0.0", port=port)
         except Exception as e:
             print("Error in reading the config file")
-    
